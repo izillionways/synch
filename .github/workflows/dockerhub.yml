@@ -67,6 +67,15 @@ jobs:
         if: steps.release.outputs.changed == 'true'
         run: gh api "repos/$GITHUB_REPOSITORY/merge-upstream" --method POST -f branch=main
 
+      - name: Sync upstream release tag
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          git fetch --no-tags https://github.com/hjinco/synch.git "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$RELEASE_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+
   build:
     needs: check
     if: needs.check.outputs.changed == 'true'

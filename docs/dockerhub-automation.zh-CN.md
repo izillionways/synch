@@ -4,6 +4,7 @@ Fork：<https://github.com/izillionways/synch>。镜像：`zillionways/synch`。
 
 - 每小时第 23 分钟（UTC）查询 `hjinco/synch` 的最新正式版 Release，跳过草稿和预发布版。
 - 检测到新版本后，使用 GitHub 官方同步接口合并上游 `main` 到 fork，保留 fork 的自动化文件；冲突会使任务失败，不会强制覆盖。
+- 每次检查都会同步最新正式版的 Git Tag，并核对它与镜像使用的源码提交一致。标签冲突时停止，不强制覆盖；GitHub Release 页面及其插件附件不会复制到 fork。
 - 镜像始终从该 Release 标签对应的准确提交构建。即使 `main` 有尚未发布的提交，也不会混入版本镜像。
 - 复用上游 `apps/api/Dockerfile`，构建 `linux/amd64` 和 `linux/arm64`，发布 `版本号` 和 `latest` 标签。
 - 发布前启动 amd64 容器并检查 `/health`；发布后查询镜像清单，成功后才记录版本。失败时下次检查会重试。
