@@ -123,5 +123,3 @@ docker compose up -d
 - [上游自托管部署文档](https://synch.run/zh-cn/self-hosting-docker/)
 - [本镜像的自动发布说明](https://github.com/izillionways/synch/blob/main/docs/dockerhub-automation.zh-CN.md)
 - [MIT License](https://github.com/hjinco/synch/blob/main/LICENSE)
-
-镜像构建和发布问题请提交到 [本仓库 Issues](https://github.com/izillionways/synch/issues)；同步功能问题请先查阅上游文档与已有问题。

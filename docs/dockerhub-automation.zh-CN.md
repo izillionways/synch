@@ -68,7 +68,9 @@ docker compose up -d
 
 公开仓库说明保存在 [`dockerhub-overview.md`](dockerhub-overview.md)。修改该文件并推送到 `main` 后，`Update Docker Hub overview` 工作流会自动更新 Docker Hub 的简短介绍和 Overview，并核对公开内容与文档一致；也可以在 Actions 中手动运行。
 
-此工作流复用 `DOCKERHUB_USERNAME` 和 `DOCKERHUB_TOKEN`。Overview 更新使用 Docker Hub 的仓库管理接口，Token 需要支持修改仓库信息；若镜像推送成功但说明更新出现 `403`，请检查 Token 权限。说明更新独立运行，无须重新构建镜像。
+此工作流复用 `DOCKERHUB_USERNAME` 和 `DOCKERHUB_TOKEN`。镜像推送只需要读写权限，但修改 Overview 需要具备 **Read, Write, Delete** 权限的 Personal Access Token（[发布 Action 的权限要求](https://github.com/peter-evans/dockerhub-description#action-inputs)）。权限不足时 Docker Hub 返回 `403 Forbidden`；工作流本身只更新简介和说明，不执行删除操作。
+
+如遇到此错误，在 Docker 账户设置的 **Personal access tokens → Generate new token** 中选择上述权限，再到 GitHub 仓库 **Settings → Secrets and variables → Actions** 更新 `DOCKERHUB_TOKEN`。之后手动运行 `Update Docker Hub overview` 即可。说明更新独立运行，无须重新构建镜像。
 
 ## 本地验证检测逻辑
 
