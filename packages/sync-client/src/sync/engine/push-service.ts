@@ -33,9 +33,8 @@ import {
 } from "./push-mutation-committer";
 import { PushBlobRetryCache } from "./push-blob-retry-cache";
 
-// TODO: Replace this fixed preparation cap with CPU and memory budgets, including
-// prepared payloads waiting for transfer. TransferScheduler controls network
-// concurrency separately; keep this cap until preparation is resource-bounded.
+// CPU/task fan-out stays separate from the shared source-byte budget and
+// adaptive network concurrency. Prepared results retain their byte reservation.
 const DEFAULT_PUSH_PREPARE_CONCURRENCY = 12;
 
 export interface SyncPushServiceDeps extends SyncContentRuntimeDeps {
@@ -48,6 +47,7 @@ export interface SyncPushServiceDeps extends SyncContentRuntimeDeps {
   prepareConcurrency?: number;
   onProgress?: (progress: SyncOperationProgress) => Promise<void>;
   onConflict?: (event: PushConflictEvent) => void;
+  /** @deprecated Name retained for host compatibility; fires for every blocked sync file. */
   onFileSizeBlockedFilesChange?: () => void;
   onFileSyncStarted?: (event: {
     operation: "upsert" | "delete";
@@ -88,11 +88,12 @@ export interface PushPendingMutationsResult {
 
 export class SyncPushService {
   private readonly remotelyStagedBlobIds = new Set<string>();
-  private readonly blobRetryCache = new PushBlobRetryCache();
+  private readonly blobRetryCache: PushBlobRetryCache;
   private readonly contentRuntime: SyncContentRuntime;
 
   constructor(private readonly deps: SyncPushServiceDeps) {
     this.contentRuntime = deps.contentRuntime;
+    this.blobRetryCache = new PushBlobRetryCache(this.contentRuntime);
   }
 
   async pushPendingMutations(
@@ -116,7 +117,7 @@ export class SyncPushService {
     let filesCreatedOrUpdated = 0;
     let filesDeleted = 0;
     let conflictsCreated = 0;
-    let fileSizeBlocked = 0;
+    let blockedSyncFiles = 0;
     let shouldPullAfterPush = false;
     const acceptedCursors: number[] = [];
     // Allow one immediate retry after requeueing; repeated churn must use the
@@ -169,8 +170,8 @@ export class SyncPushService {
               path,
               reason: prepared.reason,
             });
-            if (prepared.reason === "file_too_large") {
-              fileSizeBlocked += 1;
+            if (prepared.reason === "file_too_large" || prepared.reason === "incompatible_path") {
+              blockedSyncFiles += 1;
             }
             if (prepared.reason === "storage_quota_exceeded") {
               stopAfterCurrentBatch = true;
@@ -352,8 +353,8 @@ export class SyncPushService {
     progress.seal();
     await onProgress(progress.snapshot());
 
-    // TODO: Refresh file-size-blocked decorations when existing blocked files become syncable.
-    if (fileSizeBlocked > 0) {
+    // TODO: Refresh decorations when an existing blocked file becomes syncable.
+    if (blockedSyncFiles > 0) {
       this.deps.onFileSizeBlockedFilesChange?.();
     }
 
@@ -456,6 +457,12 @@ export class SyncPushService {
         }
       },
       shouldYield,
+      ({ prepared }) => {
+        if (prepared && !("skipped" in prepared)) {
+          prepared.encryptedBytes = null;
+          prepared.release?.();
+        }
+      },
     );
   }
 }

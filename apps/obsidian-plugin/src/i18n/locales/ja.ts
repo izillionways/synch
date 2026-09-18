@@ -144,6 +144,8 @@ export const ja = {
     "sync.connectRemoteVault": "同期を開始するにはリモートvaultに接続してください。",
     "sync.cursorMismatch": "このデバイスの同期履歴がリモートvaultと一致しないため、同期を停止しました。同期を再開するには、Synch設定でリモートvaultの接続を解除してから再接続してください。",
     "sync.fileSizeBlocked": ({ count }: { count: number }) => `${count}件のファイルが同期サイズ制限を超えています。`,
+    "sync.incompatiblePathBlocked": "このファイルのパスには互換性がないため、Synch は同期できません。ファイル名またはフォルダ名を変更してください。",
+    "sync.incompatiblePathBlockedCount": ({ count }: { count: number }) => `${count}件のファイルに互換性のないパスがあります。`,
     "sync.label": "同期",
     "sync.now": "今すぐ同期",
     "sync.frequency": "同期間隔",

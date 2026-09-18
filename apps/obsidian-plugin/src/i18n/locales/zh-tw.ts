@@ -144,6 +144,8 @@ export const zhTw = {
     "sync.connectRemoteVault": "連接遠端 vault 以開始同步。",
     "sync.cursorMismatch": "由於此裝置的同步記錄與遠端 vault 不再一致，同步已暫停。若要恢復同步，請在 Synch 設定中中斷並重新連接遠端 vault。",
     "sync.fileSizeBlocked": ({ count }: { count: number }) => `${count} 個檔案超出同步大小限制。`,
+    "sync.incompatiblePathBlocked": "此檔案的路徑不相容，因此 Synch 無法同步。請重新命名檔案或資料夾。",
+    "sync.incompatiblePathBlockedCount": ({ count }: { count: number }) => `${count} 個檔案的路徑不相容。`,
     "sync.label": "同步",
     "sync.now": "立即同步",
     "sync.frequency": "同步頻率",

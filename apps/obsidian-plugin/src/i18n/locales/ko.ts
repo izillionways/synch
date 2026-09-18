@@ -141,6 +141,8 @@ export const ko = {
     "sync.connectRemoteVault": "동기화를 시작하려면 원격 vault에 연결하세요.",
     "sync.cursorMismatch": "이 기기의 동기화 기록이 원격 vault와 일치하지 않아 동기화를 중지했습니다. 다시 동기화하려면 Synch 설정에서 원격 vault의 연결을 해제한 후 다시 연결하세요.",
     "sync.fileSizeBlocked": ({ count }: { count: number }) => `${count}개 파일이 동기화 크기 제한을 초과했습니다.`,
+    "sync.incompatiblePathBlocked": "이 파일의 경로가 호환되지 않아 Synch가 동기화할 수 없습니다. 파일 또는 폴더 이름을 변경하세요.",
+    "sync.incompatiblePathBlockedCount": ({ count }: { count: number }) => `${count}개 파일의 경로가 호환되지 않습니다.`,
     "sync.label": "동기화",
     "sync.now": "지금 동기화",
     "sync.frequency": "동기화 주기",

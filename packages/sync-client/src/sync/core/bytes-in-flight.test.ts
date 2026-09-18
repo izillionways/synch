@@ -46,6 +46,53 @@ describe("BytesInFlightBudget", () => {
     expect(budget.bytesInFlight).toBe(1);
   });
 
+  it("does not let small files overtake a waiting oversized file", async () => {
+    const budget = new BytesInFlightBudget(10);
+    await budget.acquire(4);
+    const order: string[] = [];
+    const large = budget.acquire(11).then(() => { order.push("large"); });
+    const small = budget.acquire(1).then(() => { order.push("small"); });
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    budget.release(4);
+    await large;
+    expect(order).toEqual(["large"]);
+    expect(budget.bytesInFlight).toBe(11);
+    budget.release(11);
+    await small;
+    budget.release(1);
+    expect(budget.bytesInFlight).toBe(0);
+  });
+
+  it("accounts unknown admitted inputs without deadlocking and blocks new work", async () => {
+    const budget = new BytesInFlightBudget(10);
+    const runtime = new SyncContentRuntime({ byteBudget: budget });
+    const group = await runtime.reserve(0);
+    group.retain(20);
+    const waiting = runtime.reserve(1);
+    expect(budget.bytesInFlight).toBe(20);
+    expect(budget.pendingReservations).toBe(1);
+    group.retain(5);
+    expect(budget.bytesInFlight).toBe(25);
+    group.release();
+    const next = await waiting;
+    expect(budget.bytesInFlight).toBe(1);
+    next.release();
+    expect(() => group.retain(1)).toThrow("released");
+    expect(budget.bytesInFlight).toBe(0);
+    await runtime.dispose();
+  });
+
+  it("returns an owned runtime reservation only once", async () => {
+    const budget = new BytesInFlightBudget(10);
+    const runtime = new SyncContentRuntime({ byteBudget: budget });
+    const reservation = await runtime.reserve(10);
+    reservation.release();
+    reservation.release();
+    expect(budget.bytesInFlight).toBe(0);
+    await runtime.dispose();
+  });
+
   it("releases a reservation when work fails and wakes queued work", async () => {
     const budget = new BytesInFlightBudget(10);
     const failed = budget.withReservation(10, async () => {

@@ -1,7 +1,7 @@
 import { setIcon, setTooltip, type Plugin } from "obsidian";
 
-import { getSynchLocale } from "../../i18n";
-import type { SynchFileSizeBlockedFile } from "../contracts";
+import { getSynchLocale, t } from "../../i18n";
+import type { SynchBlockedSyncFile } from "../contracts";
 
 const FILE_EXPLORER_VIEW_TYPE = "file-explorer";
 const FILE_TITLE_SELECTOR = ".nav-file-title[data-path]";
@@ -9,13 +9,13 @@ const BLOCKED_CLASS = "synch-file-size-blocked";
 const ICON_CLASS = "synch-file-size-blocked-icon";
 
 export interface SynchFileSizeBlockedDecoratorState {
-  listFileSizeBlockedFiles(): Promise<SynchFileSizeBlockedFile[]>;
+  listBlockedSyncFiles(): Promise<SynchBlockedSyncFile[]>;
 }
 
 export class SynchFileSizeBlockedDecorator {
   private refreshTimer: number | null = null;
   private refreshRun = 0;
-  private blockedFiles: SynchFileSizeBlockedFile[] = [];
+  private blockedFiles: SynchBlockedSyncFile[] = [];
 
   constructor(
     private readonly plugin: Plugin,
@@ -54,7 +54,7 @@ export class SynchFileSizeBlockedDecorator {
     this.refreshRun = run;
 
     try {
-      const blockedFiles = await this.state.listFileSizeBlockedFiles();
+      const blockedFiles = await this.state.listBlockedSyncFiles();
       if (run !== this.refreshRun) {
         return;
       }
@@ -71,7 +71,7 @@ export class SynchFileSizeBlockedDecorator {
     }
   }
 
-  private decorate(blockedFiles: SynchFileSizeBlockedFile[]): void {
+  private decorate(blockedFiles: SynchBlockedSyncFile[]): void {
     const blockedByPath = new Map(blockedFiles.map((file) => [file.path, file]));
     for (const leaf of this.plugin.app.workspace.getLeavesOfType(FILE_EXPLORER_VIEW_TYPE)) {
       decorateFileExplorerElement(leaf.view.containerEl, blockedByPath);
@@ -81,7 +81,7 @@ export class SynchFileSizeBlockedDecorator {
 
 export function decorateFileExplorerElement(
   root: HTMLElement,
-  blockedByPath: ReadonlyMap<string, SynchFileSizeBlockedFile>,
+  blockedByPath: ReadonlyMap<string, SynchBlockedSyncFile>,
 ): void {
   for (const icon of queryHtmlElements(root, `.${ICON_CLASS}`)) {
     icon.remove();
@@ -116,7 +116,11 @@ function queryHtmlElements(root: HTMLElement, selector: string): HTMLElement[] {
   return Array.from(elements);
 }
 
-export function formatFileSizeBlockedTooltip(file: SynchFileSizeBlockedFile): string {
+export function formatFileSizeBlockedTooltip(file: SynchBlockedSyncFile): string {
+  if (file.reason === "incompatible_path") {
+    return t("sync.incompatiblePathBlocked");
+  }
+
   switch (getSynchLocale()) {
     case "ko":
       return [

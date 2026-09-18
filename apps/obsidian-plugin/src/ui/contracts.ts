@@ -1,14 +1,3 @@
-import type { UserVisibleSyncProgress } from "@synch/sync-client/engine";
-import type { SyncFileRules, VaultConfigSyncRules } from "@synch/sync-client/core";
-
-// The only type bridge allowed so the ui layer never imports feature modules
-// directly.
-export type { AuthReadiness } from "@synch/sync-client/auth";
-
-export type SynchFileRules = SyncFileRules;
-
-export type SynchVaultConfigSyncRules = VaultConfigSyncRules;
-
 /**
  * Obsidian's undocumented settings-modal API, present on `App` at runtime.
  * Kept optional so callers degrade gracefully if Obsidian changes it.
@@ -34,8 +23,6 @@ export type SynchSyncState =
   | "attention_needed"
   | "update_required";
 
-export type SynchSyncProgress = UserVisibleSyncProgress;
-
 export interface SynchSyncLogs {
   count: number;
   text: string;
@@ -51,11 +38,15 @@ export type SynchStorageDisplayState =
   | "near_limit"
   | "needs_more_storage";
 
-export interface SynchFileSizeBlockedFile {
+export interface SynchBlockedSyncFile {
   path: string;
+  reason?: "file_too_large" | "incompatible_path";
   encryptedSizeBytes: number | null;
   maxFileSizeBytes: number | null;
 }
+
+/** @deprecated Use `SynchBlockedSyncFile`. */
+export type SynchFileSizeBlockedFile = SynchBlockedSyncFile;
 
 export type SynchCommunityPluginUpdateStatus =
   | {

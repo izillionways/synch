@@ -1,19 +1,29 @@
+import { isPortableVaultPath } from "../core/portable-path";
 import { decryptSyncMetadata } from "../core/crypto";
 import { metadataContextFromMutation } from "./push-mutation-shared";
 import type { SyncStore } from "../store/store";
+import type { PendingMutationBlockedReason } from "../store/store";
 
+/** @deprecated Use `SyncBlockedSyncFile`. */
 export interface SyncFileSizeBlockedFile {
   path: string;
   encryptedSizeBytes: number | null;
   maxFileSizeBytes: number | null;
 }
 
-export async function listFileSizeBlockedFiles(
+export interface SyncBlockedSyncFile extends SyncFileSizeBlockedFile {
+  reason: PendingMutationBlockedReason;
+}
+
+export async function listBlockedSyncFiles(
   store: SyncStore,
   remoteVaultKey: Uint8Array,
-): Promise<SyncFileSizeBlockedFile[]> {
-  const mutations = await store.listBlockedDirtyEntriesByReason("file_too_large");
-  const files: SyncFileSizeBlockedFile[] = [];
+): Promise<SyncBlockedSyncFile[]> {
+  const mutations = (await Promise.all([
+    store.listBlockedDirtyEntriesByReason("file_too_large"),
+    store.listBlockedDirtyEntriesByReason("incompatible_path"),
+  ])).flat();
+  const files: SyncBlockedSyncFile[] = [];
   for (const mutation of mutations) {
     if (mutation.op !== "upsert") {
       continue;
@@ -26,10 +36,35 @@ export async function listFileSizeBlockedFiles(
     );
     files.push({
       path: metadata.path,
+      reason: mutation.blockedReason ?? "file_too_large",
       encryptedSizeBytes: mutation.blockedEncryptedSizeBytes ?? null,
       maxFileSizeBytes: mutation.blockedMaxFileSizeBytes ?? null,
     });
   }
 
-  return files;
+  // Pull already persists decrypted remote metadata even when applying the
+  // file was rejected. Derive remote warnings from that state so they survive
+  // restarts and disappear when the remote path is renamed or deleted.
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  for (const remote of await store.listRemoteStates()) {
+    if (!remote.deleted && remote.path && !isPortableVaultPath(remote.path)) {
+      byPath.set(remote.path, {
+        path: remote.path,
+        reason: "incompatible_path",
+        encryptedSizeBytes: null,
+        maxFileSizeBytes: null,
+      });
+    }
+  }
+  return [...byPath.values()];
+}
+
+/** @deprecated Use `listBlockedSyncFiles`. */
+export async function listFileSizeBlockedFiles(
+  store: SyncStore,
+  remoteVaultKey: Uint8Array,
+): Promise<SyncFileSizeBlockedFile[]> {
+  return (await listBlockedSyncFiles(store, remoteVaultKey)).filter(
+    (file) => file.reason === "file_too_large",
+  );
 }

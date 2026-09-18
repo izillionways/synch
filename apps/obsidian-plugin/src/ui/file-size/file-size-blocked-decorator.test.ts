@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Plugin } from "obsidian";
+import { t } from "../../i18n";
 
 import {
   decorateFileExplorerElement,
@@ -106,7 +107,7 @@ describe("Synch file-size blocked decorator", () => {
         registerEvent: () => {},
       } as unknown as Plugin,
       {
-        async listFileSizeBlockedFiles() {
+        async listBlockedSyncFiles() {
           return [
             {
               path: "large.md",
@@ -137,6 +138,15 @@ describe("Synch file-size blocked decorator", () => {
       });
     }).not.toThrow();
     expect(tooltip.length).toBeGreaterThan(0);
+  });
+
+  it("explains when a file path is incompatible", () => {
+    expect(formatFileSizeBlockedTooltip({
+      path: "Notes/a:b.md",
+      reason: "incompatible_path",
+      encryptedSizeBytes: null,
+      maxFileSizeBytes: null,
+    })).toBe(t("sync.incompatiblePathBlocked"));
   });
 });
 

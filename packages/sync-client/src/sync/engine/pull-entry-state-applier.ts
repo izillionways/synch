@@ -1,5 +1,5 @@
 import { decryptSyncMetadata } from "../core/crypto";
-import type { SyncContentRuntimeDeps } from "../core/content-runtime";
+import type { ContentReservation, SyncContentRuntimeDeps } from "../core/content-runtime";
 import type { SyncTokenResponse } from "../remote/client";
 import type { RemoteEntryState } from "../remote/changes";
 import type { SyncBlobClient } from "../remote/blob-client";
@@ -18,25 +18,22 @@ import {
 } from "../vault/vault-writer";
 import type { SyncVaultAccess } from "../vault/ports";
 import type { SyncEventGateLike } from "./event-gate";
+import { groupPullApplications } from "./pull-application-groups";
+import { runPullPreparationPipeline } from "./pull-preparation-pipeline";
 import { PullBlobPreparer } from "./pull-blob-preparer";
 import { PullManifestPlanner, type PullManifestStore } from "./pull-manifest-planner";
 import { PullPendingMutationHandler } from "./pull-pending-mutation-handler";
 import {
-  createPathDependencyBatches,
   DEFAULT_PREPARE_CONCURRENCY,
   groupPendingConflictsByPlan,
   mapWithConcurrency,
   metadataContextFromRemoteState,
-  packPathDependencyBatches,
   pathsToRemoveForPlan,
   type PullConflictEvent,
   type PullEntryStateManifestItem,
   type PullRollbackEvent,
   type PlannedEntryState,
-  type PreparedEntryBlob,
   type PreparedManifestApplication,
-  type PreparedPendingConflict,
-  type PreparedPathBatch,
   type SnapshotEntryState,
   uniquePendingConflicts,
   uniqueSyncPaths,
@@ -47,7 +44,7 @@ export interface PullEntryStateApplierDeps extends SyncContentRuntimeDeps {
   vaultAdapter: PullEntryStateVaultAdapter;
   eventGate?: SyncEventGateLike;
   blobClient: Pick<SyncBlobClient, "downloadBlob">;
-  shouldApplyRemotePath?: (path: string) => boolean;
+  shouldApplyRemotePath?: (path: string, deleted: boolean) => boolean;
   shouldUseLatestRemoteVersion?: (path: string) => boolean;
   prepareConcurrency?: number;
   onConflict?: (event: PullConflictEvent) => void;
@@ -199,150 +196,120 @@ export class PullEntryStateApplier {
       };
     }
 
-    let prepared: PreparedManifestApplication;
-    try {
-      prepared = await this.prepareManifestApplication(store, token, manifest, {
-        deferExternalPathOwners: !options.finalWindow,
-      });
-    } catch (error) {
-      for (const item of manifest) {
-        this.deps.onFileSyncFailed?.({
-          operation: item.state.deleted ? "delete" : "upsert",
-          path: item.metadata.path ?? "<unavailable>",
-          reason: "prepare_failed",
-        });
+    const { plans, deferred, superseded, skipped } = await this.manifestPlanner.planManifest(
+      store, manifest, { deferExternalPathOwners: !options.finalWindow },
+    );
+    await this.applySkippedRemoteStates(store, skipped);
+    await this.markAlreadyCurrentVaultWrites(store, plans);
+    const supersededWithPaths = await Promise.all(superseded.map(async (item) => ({
+      item, existingPath: (await store.getEntryById(item.state.entryId))?.path ?? null,
+    })));
+    const groups: Array<{ prepared: PreparedManifestApplication; estimate: number }> = [];
+    for (const group of groupPullApplications(plans, supersededWithPaths)) {
+      let estimate = 0;
+      const localPaths = new Set<string>();
+      for (const plan of group.plans) {
+        const size = plan.state.blobSize;
+        if (size != null && (!Number.isSafeInteger(size) || size < 0)) {
+          throw new Error(`Entry state ${plan.state.entryId} has an invalid blob size.`);
+        }
+        if (!plan.state.deleted && !plan.skipVaultWrite) estimate += (size ?? 0) * 3;
+        if (plan.existing?.path) localPaths.add(plan.existing.path);
+        if (plan.adoptedLocalEntry?.entry.path) localPaths.add(plan.adoptedLocalEntry.entry.path);
       }
-      throw error;
+      for (const path of localPaths) {
+        if (await this.deps.vaultAdapter.exists(path)) {
+          estimate += (await this.deps.vaultAdapter.getFileSize(path)) * 8;
+        }
+      }
+      groups.push({
+        estimate,
+        prepared: {
+          plans: group.plans,
+          superseded: group.superseded,
+          supersededPathsToRemove: await this.findSupersededPathsToRemove(store, group.superseded, plans),
+          pathsToWrite: uniqueSyncPaths(group.plans.filter((plan) => !plan.skipVaultWrite).map((plan) => plan.finalPath)),
+          completedStates: [], deferred: [], pendingConflicts: [], batches: [],
+        },
+      });
     }
-    const filesDeleted = await this.applyPreparedManifest(store, prepared);
-
+    let filesDeleted = 0;
+    await runPullPreparationPipeline({
+      groups,
+      concurrency: this.deps.prepareConcurrency ?? DEFAULT_PREPARE_CONCURRENCY,
+      runtime: this.deps.contentRuntime,
+      estimatedBytes: (group) => group.estimate,
+      prepare: async ({ prepared }, reservation) => {
+        try {
+          await this.prepareApplicationGroup(store, token, prepared, reservation);
+        } catch (error) {
+          for (const plan of prepared.plans) {
+            this.deps.onFileSyncFailed?.({
+              operation: plan.state.deleted ? "delete" : "upsert",
+              path: plan.metadata.path ?? "<unavailable>", reason: "prepare_failed",
+            });
+          }
+          throw error;
+        }
+      },
+      apply: async ({ prepared }) => {
+        filesDeleted += await this.applyPreparedManifest(store, prepared);
+      },
+      clear: ({ prepared }) => {
+        prepared.batches.length = 0;
+        prepared.pendingConflicts.length = 0;
+      },
+    });
     return {
-      entriesApplied: prepared.plans.length + prepared.superseded.length,
-      filesWritten: prepared.pathsToWrite.length,
+      entriesApplied: plans.length + superseded.length,
+      filesWritten: groups.reduce((count, group) => count + group.prepared.pathsToWrite.length, 0),
       filesDeleted,
-      conflictsCreated: prepared.plans.reduce(
-        (count, plan) =>
-          count +
-          (plan.pathConflict?.conflictPath ? 1 : 0) +
-          (plan.pendingConflict?.conflictPath ? 1 : 0),
-        0,
-      ),
-      deferred: prepared.deferred,
-      completedStates: prepared.completedStates,
+      conflictsCreated: plans.reduce((count, plan) => count +
+        (plan.pathConflict?.conflictPath ? 1 : 0) + (plan.pendingConflict?.conflictPath ? 1 : 0), 0),
+      deferred,
+      completedStates: [...plans, ...superseded, ...skipped].map(({ state }) => ({
+        entryId: state.entryId, revision: state.revision,
+      })),
     };
   }
 
-  private async prepareManifestApplication(
+  private async prepareApplicationGroup(
     store: PullEntryStateStore,
     token: SyncTokenResponse,
-    manifest: PullEntryStateManifestItem[],
-    options: { deferExternalPathOwners: boolean },
-  ): Promise<PreparedManifestApplication> {
-    const {
-      plans: allPlans,
-      deferred,
-      superseded,
-    } = await this.manifestPlanner.planManifest(store, manifest, options);
-    const plans = allPlans.filter((plan) => this.shouldApplyPlanToVault(plan));
-    await this.applySkippedRemoteStates(store, allPlans, plans);
-    await this.markAlreadyCurrentVaultWrites(store, plans);
-    const supersededPathsToRemove = await this.findSupersededPathsToRemove(
-      store,
-      superseded,
-      plans,
-    );
-    const pathsToWrite = uniqueSyncPaths(
-      plans
-        .filter((plan) => !plan.skipVaultWrite)
-        .map((plan) => plan.finalPath),
-    );
-    const pendingConflicts: PreparedPendingConflict[] = [];
-    const preparedPendingMutationIds = new Set<string>();
-    const batches: PreparedPathBatch[] = [];
-    const preparedBlobs = await this.blobPreparer.preparePathBatchBlobs(
-      store,
-      token,
-      plans,
-    );
-    const blobByPlan = new Map(preparedBlobs.map((blob) => [blob.plan, blob]));
-
-    for (const plan of plans) {
-      if (plan.adoptedLocalEntry?.hashMatches) {
-        continue;
-      }
-
-      const pendingConflict = await this.pendingMutations.prepareConflictingPendingMutation(
-        store,
-        plan,
-        blobByPlan.get(plan) ?? null,
+    prepared: PreparedManifestApplication,
+    reservation: ContentReservation,
+  ): Promise<void> {
+    const blobs = await this.blobPreparer.preparePathBatchBlobs(store, token, prepared.plans, reservation);
+    prepared.batches.push({
+      plans: prepared.plans,
+      pathsToRemove: uniqueSyncPaths(prepared.plans.flatMap(pathsToRemoveForPlan)),
+      blobs,
+    });
+    const blobByPlan = new Map(blobs.map((blob) => [blob.plan, blob]));
+    const pendingIds = new Set<string>();
+    for (const plan of prepared.plans) {
+      if (plan.adoptedLocalEntry?.hashMatches) continue;
+      const conflict = await this.pendingMutations.prepareConflictingPendingMutation(
+        store, plan, blobByPlan.get(plan) ?? null, reservation,
       );
-      if (pendingConflict) {
-        if (preparedPendingMutationIds.has(pendingConflict.pending.mutationId)) {
-          continue;
-        }
-        preparedPendingMutationIds.add(pendingConflict.pending.mutationId);
-        plan.pendingConflict = pendingConflict.event;
-        pendingConflicts.push(pendingConflict);
-      }
+      if (!conflict || pendingIds.has(conflict.pending.mutationId)) continue;
+      pendingIds.add(conflict.pending.mutationId);
+      plan.pendingConflict = conflict.event;
+      prepared.pendingConflicts.push(conflict);
     }
-
-    const pathBatches = packPathDependencyBatches(
-      createPathDependencyBatches(plans),
-      this.deps.prepareConcurrency ?? DEFAULT_PREPARE_CONCURRENCY,
-    );
-
-    for (const batchPlans of pathBatches) {
-      const pathsToRemove = uniqueSyncPaths(batchPlans.flatMap(pathsToRemoveForPlan));
-      const blobs = batchPlans
-        .map((plan) => blobByPlan.get(plan))
-        .filter((blob): blob is PreparedEntryBlob => !!blob);
-
-      batches.push({ plans: batchPlans, pathsToRemove, blobs });
-    }
-
-    return {
-      completedStates: [...allPlans, ...superseded].map(({ state }) => ({
-        entryId: state.entryId,
-        revision: state.revision,
-      })),
-      plans,
-      superseded,
-      supersededPathsToRemove,
-      pathsToWrite,
-      pendingConflicts,
-      batches,
-      deferred,
-    };
-  }
-
-  private shouldApplyPlanToVault(plan: PlannedEntryState): boolean {
-    return (
-      !plan.metadata.path ||
-      this.deps.shouldApplyRemotePath?.(plan.metadata.path) !== false
-    );
   }
 
   private async applySkippedRemoteStates(
     store: PullEntryStateStore,
-    allPlans: PlannedEntryState[],
-    appliedPlans: PlannedEntryState[],
+    skipped: PullEntryStateManifestItem[],
   ): Promise<void> {
-    if (allPlans.length === appliedPlans.length) {
-      return;
-    }
-
-    const applied = new Set(appliedPlans);
-    for (const plan of allPlans) {
-      if (applied.has(plan)) {
-        continue;
-      }
-
+    for (const plan of skipped) {
       await store.applyRemoteState({
         entryId: plan.state.entryId,
         path: plan.metadata.path,
         revision: plan.state.revision,
         blobId: plan.state.deleted ? null : plan.state.blobId,
-        hash: plan.hash,
+        hash: plan.metadata.hash,
         deleted: plan.state.deleted,
         updatedAt: plan.state.updatedAt,
       });

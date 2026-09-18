@@ -396,8 +396,8 @@ describe("SyncController", () => {
   });
 
   it("returns no file-size blocked files without an active authenticated remote vault session", async () => {
-    const listFileSizeBlockedFiles = vi
-      .spyOn(SyncEngine.prototype, "listFileSizeBlockedFiles")
+    const listBlockedSyncFiles = vi
+      .spyOn(SyncEngine.prototype, "listBlockedSyncFiles")
       .mockResolvedValue([
         {
           path: "large.md",
@@ -411,8 +411,9 @@ describe("SyncController", () => {
       }),
     );
 
+    await expect(controller.listBlockedSyncFiles()).resolves.toEqual([]);
     await expect(controller.listFileSizeBlockedFiles()).resolves.toEqual([]);
-    expect(listFileSizeBlockedFiles).not.toHaveBeenCalled();
+    expect(listBlockedSyncFiles).not.toHaveBeenCalled();
   });
 });
 

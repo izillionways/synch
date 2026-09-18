@@ -40,8 +40,8 @@ export function parseSyncedEntryMetadata(value: string): SyncedEntryMetadata {
   }
 
   const record = parsed as Record<string, unknown>;
-  const path = typeof record.path === "string" ? record.path.trim() : "";
-  if (!path) {
+  const path = typeof record.path === "string" ? record.path : "";
+  if (!path.trim()) {
     throw new Error("Sync metadata is missing a file path.");
   }
   if (!Object.prototype.hasOwnProperty.call(record, "hash")) {

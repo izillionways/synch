@@ -1,5 +1,6 @@
 import type { SyncContentRuntimeDeps } from "../core/content-runtime";
 import { decryptSyncBlob } from "../core/crypto";
+import { isPortableVaultPath } from "../core/portable-path";
 import {
   shouldSyncVaultConfigPath,
   type VaultConfigSyncRules,
@@ -37,6 +38,7 @@ export async function reapplyAllowedRemoteVaultConfig(
   const remotes = (await store.listRemoteStates()).filter(
     (entry) =>
       entry.path &&
+      isPortableVaultPath(entry.path) &&
       shouldSyncVaultConfigPath(entry.path, rules, deps.configDir),
   );
   if (remotes.length === 0) {

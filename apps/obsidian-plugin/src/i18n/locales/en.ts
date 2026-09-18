@@ -155,6 +155,8 @@ export const en = {
     "sync.conflictLocalSaved": ({ path }: { path: string }) => `Sync conflict detected. Your local changes were saved to "${path}".`,
     "sync.conflictRemoteKept": ({ path }: { path: string }) => `Sync conflict detected for "${path}". The remote version will be kept.`,
     "sync.fileSizeBlocked": ({ count }: { count: number }) => `${count} ${count === 1 ? "file exceeds" : "files exceed"} the sync size limit.`,
+    "sync.incompatiblePathBlocked": "Synch cannot sync this file because its path is incompatible. Rename the file or folder to continue.",
+    "sync.incompatiblePathBlockedCount": ({ count }: { count: number }) => `${count} ${count === 1 ? "file has" : "files have"} an incompatible path.`,
     "sync.label": "Sync",
     "sync.now": "Sync now",
     "sync.frequency": "Sync frequency",

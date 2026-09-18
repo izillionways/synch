@@ -64,7 +64,9 @@ import {
   type SyncEntryVersionsPage,
 } from "./version-history-service";
 import {
+  listBlockedSyncFiles,
   listFileSizeBlockedFiles,
+  type SyncBlockedSyncFile,
   type SyncFileSizeBlockedFile,
 } from "../engine/file-size-blocked";
 import {
@@ -78,6 +80,7 @@ const HIDDEN_FOLDER_RECONCILE_INTERVAL_MS = 60_000;
 export interface SyncEngineDeps {
   /** Caller-owned when supplied; otherwise the engine creates and disposes it. */
   contentRuntime?: SyncContentRuntime;
+  maxBytesInFlight?: number;
   vaultAdapter: SyncVaultAdapter;
   vaultConfigSource: SyncVaultConfigSource;
   httpClient: HttpClient;
@@ -149,7 +152,7 @@ export class SyncEngine {
 
   constructor(private readonly deps: SyncEngineDeps) {
     this.ownsContentRuntime = !deps.contentRuntime;
-    this.contentRuntime = deps.contentRuntime ?? new SyncContentRuntime();
+    this.contentRuntime = deps.contentRuntime ?? new SyncContentRuntime({ maxBytesInFlight: deps.maxBytesInFlight });
     this.vaultAdapter = deps.vaultAdapter;
     this.vaultConfigSource = deps.vaultConfigSource;
     this.syncEventRecorder = new SyncEventRecorder({
@@ -315,11 +318,12 @@ export class SyncEngine {
       },
     });
     this.syncPullService = new SyncPullService({
+      onRemoteStatesChange: () => this.deps.onFileSizeBlockedFilesChange?.(),
       getSyncToken: async () => await this.deps.getSyncToken(),
       getSyncStore: () => this.syncStore,
       getRemoteVaultKey: () => this.deps.getRemoteVaultKey(),
-      shouldApplyRemotePath: (path) =>
-        shouldApplyRemoteVaultPath(path, this.vaultPathPolicyRules()),
+      shouldApplyRemotePath: (path, deleted) =>
+        shouldApplyRemoteVaultPath(path, this.vaultPathPolicyRules(), { deleted }),
       shouldUseLatestRemoteVersion: (path) =>
         shouldUseLatestRemoteVaultConfig(path, this.vaultPathPolicyRules()),
       eventGate: this.syncEventGate,
@@ -488,6 +492,10 @@ export class SyncEngine {
     return await this.syncAutoLoop.syncNow();
   }
 
+  async pullOnlyOnce(): Promise<void> {
+    await this.syncAutoLoop.pullOnlyOnce();
+  }
+
   async flushDebouncedPushAndWaitForInFlight(): Promise<void> {
     await this.waitForLocalMutationWork();
     this.syncAutoLoop.flushDebouncedPush();
@@ -637,6 +645,16 @@ export class SyncEngine {
     return this.deps.getConfigDir();
   }
 
+  async listBlockedSyncFiles(): Promise<SyncBlockedSyncFile[]> {
+    const store = this.syncStore;
+    if (!store) {
+      return [];
+    }
+
+    return await listBlockedSyncFiles(store, this.deps.getRemoteVaultKey());
+  }
+
+  /** @deprecated Use `listBlockedSyncFiles`. */
   async listFileSizeBlockedFiles(): Promise<SyncFileSizeBlockedFile[]> {
     const store = this.syncStore;
     if (!store) {
@@ -779,5 +797,5 @@ export class SyncEngine {
   }
 }
 
-export type { SyncFileSizeBlockedFile } from "../engine/file-size-blocked";
+export type { SyncBlockedSyncFile, SyncFileSizeBlockedFile } from "../engine/file-size-blocked";
 export type SyncEngineEntryVersionsPage = SyncEntryVersionsPage;

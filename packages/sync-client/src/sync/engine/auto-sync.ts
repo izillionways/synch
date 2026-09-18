@@ -14,7 +14,7 @@ import {
   type SyncStorageStatus,
   type PresenceUpdatedPush,
 } from "../remote/realtime-client";
-import type { SyncCursorStore } from "../store/ports";
+import type { SyncCursorStore, SyncMutationStore } from "../store/ports";
 import { SyncAutoLoopState, type SyncConnectionState } from "./auto-sync-state";
 import { AutoSyncTimers } from "./auto-sync-timers";
 import { PendingSyncWorkQueue } from "./auto-sync-work-queue";
@@ -28,7 +28,7 @@ const DEFAULT_SYNC_RETRY_MAX_DELAY_MS = 30_000;
 export interface SyncAutoLoopDeps {
   getApiBaseUrl: () => string;
   getSyncToken: () => Promise<SyncTokenResponse>;
-  getSyncStore: () => SyncCursorStore | null;
+  getSyncStore: () => (SyncCursorStore & SyncMutationStore) | null;
   pushPendingMutations: (
     session: SyncRealtimeSession,
     shouldYield: () => boolean,
@@ -161,6 +161,72 @@ export class SyncAutoLoop {
       !this.timers.has("syncRetry") &&
       !this.timers.has("reconnect")
     );
+  }
+
+  /**
+   * Pull remote changes once without reconciling or uploading local changes.
+   *
+   * This deliberately uses a short-lived realtime session outside the normal
+   * auto-sync drain loop, so pending local mutations are never scheduled for
+   * push. It is intended for read-only replicas such as backup hosts.
+   */
+  async pullOnlyOnce(): Promise<void> {
+    if (this.isActive() || this.connectPromise || this.drainPromise) {
+      throw new Error(
+        "Pull-only sync requires the auto-sync loop and all in-flight sync work to be stopped.",
+      );
+    }
+
+    const store = this.deps.getSyncStore();
+    if (!store) {
+      throw new Error("Sync store is not initialized.");
+    }
+
+    const pendingMutations = await store.listDirtyEntries(1);
+    if (pendingMutations.length > 0) {
+      throw new Error(
+        "Pull-only sync requires a read-only replica with no pending local changes. Use a fresh backup directory or resolve the pending changes with `synch sync` first.",
+      );
+    }
+
+    const token = await this.deps.getSyncToken();
+    const cursor = await store.getCursor();
+    let sessionError: Error | null = null;
+    const session = await this.realtimeClient.openSession(
+      this.deps.getApiBaseUrl(),
+      token,
+      cursor,
+      {
+        onCursorAdvanced() {},
+        onStorageStatusUpdated() {},
+        onPolicyUpdated() {},
+        onPresenceUpdated() {},
+        onPresenceCleared() {},
+        onPresenceAvailabilityChanged() {},
+        onClose() {},
+        onError(error) {
+          sessionError ??= error;
+        },
+      },
+    );
+
+    try {
+      if (cursor > session.serverCursor) {
+        throw new SyncRealtimeError(
+          "cursor_ahead_of_server",
+          "This device's sync history no longer matches the remote vault. Move .synch/sync.sqlite aside, then run `synch vault connect --vault-id <id>` to rebuild this read-only replica's sync state.",
+        );
+      }
+      if (sessionError) {
+        throw sessionError;
+      }
+      await this.deps.pullOnce(session);
+      if (sessionError) {
+        throw sessionError;
+      }
+    } finally {
+      session.close();
+    }
   }
 
   requestPull(targetCursor: number | null = null): void {

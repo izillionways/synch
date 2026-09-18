@@ -393,16 +393,24 @@ describe("SynchSettingTab sync status", () => {
         completedEntries: 4000,
         totalEntries: 4001,
       }),
-      listFileSizeBlockedFiles: vi.fn(async () => [
+      listBlockedSyncFiles: vi.fn(async () => [
         {
           path: "large.bin",
+          reason: "file_too_large",
           encryptedSizeBytes: 12_400_000,
           maxFileSizeBytes: 10_000_000,
         },
         {
           path: "larger.bin",
+          reason: "file_too_large",
           encryptedSizeBytes: 22_400_000,
           maxFileSizeBytes: 10_000_000,
+        },
+        {
+          path: "notes/a:b.md",
+          reason: "incompatible_path",
+          encryptedSizeBytes: null,
+          maxFileSizeBytes: null,
         },
       ]),
     });
@@ -418,7 +426,7 @@ describe("SynchSettingTab sync status", () => {
         attributes: expect.objectContaining({
           "aria-hidden": "true",
           "data-icon": "triangle-alert",
-          "data-tooltip": t("sync.fileSizeBlocked", { count: 2 }),
+          "data-tooltip": `${t("sync.fileSizeBlocked", { count: 2 })} ${t("sync.incompatiblePathBlockedCount", { count: 1 })}`,
           "data-tooltip-delay": "1",
           "data-tooltip-placement": "right",
         }),
@@ -427,12 +435,12 @@ describe("SynchSettingTab sync status", () => {
   });
 
   it("refreshes the file size warning without rerendering the settings tab", async () => {
-    let blockedFiles: Awaited<ReturnType<SynchSettingsController["listFileSizeBlockedFiles"]>> = [];
+    let blockedFiles: Awaited<ReturnType<SynchSettingsController["listBlockedSyncFiles"]>> = [];
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
       hasConnectedRemoteVault: () => true,
       getSyncState: () => "up_to_date",
-      listFileSizeBlockedFiles: vi.fn(async () => blockedFiles),
+      listBlockedSyncFiles: vi.fn(async () => blockedFiles),
     });
 
     tab.open();

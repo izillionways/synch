@@ -10,6 +10,7 @@ import {
   shouldSyncVaultConfigPath,
   type VaultConfigSyncRules,
 } from "./vault-config-rules";
+import { isPortableVaultPath } from "./portable-path";
 
 export type VaultPathPolicyDecision =
   | { kind: "sync" }
@@ -46,7 +47,14 @@ export function decideVaultPathSync(
 export function shouldApplyRemoteVaultPath(
   path: string,
   rules: VaultPathPolicyRules,
+  options: { deleted?: boolean } = {},
 ): boolean {
+  // A tombstone cannot create an incompatible path. Allow it through so
+  // clients upgraded from versions that synced such paths can remove the
+  // already-tracked local file.
+  if (!options.deleted && !isPortableVaultPath(path)) {
+    return false;
+  }
   if (isForbiddenVaultPath(path, rules.configDir)) {
     return false;
   }

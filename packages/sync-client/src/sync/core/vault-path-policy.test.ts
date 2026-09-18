@@ -126,6 +126,30 @@ describe("decideVaultPathSync", () => {
 });
 
 describe("shouldApplyRemoteVaultPath", () => {
+  it("does not apply a path that is incompatible with another platform", () => {
+    expect(
+      shouldApplyRemoteVaultPath("Notes/a:b.md", {
+        fileRules: DEFAULT_SYNC_FILE_RULES,
+        vaultConfigRules: DEFAULT_VAULT_CONFIG_SYNC_RULES,
+        configDir: ".obsidian",
+      }),
+    ).toBe(false);
+  });
+
+  it("applies a tombstone for a previously synced incompatible path", () => {
+    expect(
+      shouldApplyRemoteVaultPath(
+        "Notes/a:b.md",
+        {
+          fileRules: DEFAULT_SYNC_FILE_RULES,
+          vaultConfigRules: DEFAULT_VAULT_CONFIG_SYNC_RULES,
+          configDir: DEFAULT_CONFIG_DIR,
+        },
+        { deleted: true },
+      ),
+    ).toBe(true);
+  });
+
   it("keeps normal remote files eligible while honoring vault config rules", () => {
     expect(
       shouldApplyRemoteVaultPath("Notes/daily.md", {

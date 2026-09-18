@@ -33,6 +33,7 @@ interface PullManifestPlannerDeps {
   onConflict?: (event: PullConflictEvent) => void;
   onRollbackDetected?: (event: PullRollbackEvent) => void;
   shouldUseLatestRemoteVersion?: (path: string) => boolean;
+  shouldApplyRemotePath?: (path: string, deleted: boolean) => boolean;
   now?: () => number;
 }
 
@@ -47,8 +48,31 @@ export class PullManifestPlanner {
     plans: PlannedEntryState[];
     deferred: PullEntryStateManifestItem[];
     superseded: PullEntryStateManifestItem[];
+    skipped: PullEntryStateManifestItem[];
   }> {
-    const validatedManifest = manifest.map((item) => this.validateManifestItem(item));
+    const validatedManifest: ValidatedManifestItem[] = [];
+    const skipped: PullEntryStateManifestItem[] = [];
+    for (const input of manifest) {
+      const item = this.validateManifestItem(input);
+      if (this.deps.shouldApplyRemotePath?.(item.metadata.path, item.state.deleted) !== false) {
+        validatedManifest.push(item);
+        continue;
+      }
+
+      const existing = await store.getEntryById(item.state.entryId);
+      if (existing && existing.revision > 0 && item.state.revision < existing.revision) {
+        this.deps.onRollbackDetected?.({
+          entryId: item.state.entryId,
+          path: item.metadata.path,
+          localRevision: existing.revision,
+          remoteRevision: item.state.revision,
+        });
+        continue;
+      }
+      skipped.push(item);
+    }
+    // Rejected entries retain their local paths. They must not count as moving
+    // owners or reserve destinations while planning the accepted entries.
     const latestManagedEntryByPath = this.findLatestManagedEntryByPath(validatedManifest);
     const activeManifest: ValidatedManifestItem[] = [];
     const superseded: PullEntryStateManifestItem[] = [];
@@ -228,7 +252,7 @@ export class PullManifestPlanner {
       });
     }
 
-    return { plans, deferred, superseded };
+    return { plans, deferred, superseded, skipped };
   }
 
   private validateManifestItem(item: PullEntryStateManifestItem): ValidatedManifestItem {

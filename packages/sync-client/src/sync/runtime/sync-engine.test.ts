@@ -71,7 +71,7 @@ describe("SyncEngine", () => {
     await store.close();
   });
 
-  it("lists file-size blocked files with decrypted paths and size metadata", async () => {
+  it("keeps the deprecated file-size list limited to oversized files", async () => {
     const vault = new InMemoryVaultAdapter();
     vault.seedText("note.md", "body");
     const store = createTestSyncStore();
@@ -89,16 +89,64 @@ describe("SyncEngine", () => {
       blockedEncryptedSizeBytes: 12_400_000,
       blockedMaxFileSizeBytes: 10_000_000,
     });
+    const incompatiblePath = await queueLocalUpsertMutation(store, {
+      remoteVaultKey: TEST_VAULT_KEY,
+      path: "Folder/bad:name.md",
+      entryId: "entry-incompatible-path",
+      base: null,
+      hash: "hash-incompatible-path",
+    });
+    await store.updateDirtyEntry({
+      ...incompatiblePath.mutation,
+      status: "blocked",
+      blockedReason: "incompatible_path",
+    });
+    // A remote copy and a blocked local mutation at the same path are one warning.
+    await store.applyRemoteState({
+      entryId: "entry-incompatible-path",
+      path: "Folder/bad:name.md",
+      revision: 1,
+      blobId: "blob-remote",
+      hash: "remote-hash",
+      deleted: false,
+      updatedAt: 1,
+    });
+    await store.applyRemoteState({
+      entryId: "remote-only",
+      path: "remote:only.md",
+      revision: 1,
+      blobId: "blob-remote-only",
+      hash: "remote-only-hash",
+      deleted: false,
+      updatedAt: 1,
+    });
     const { engine } = createTestEngine(vault);
     engine.setStore(store);
 
-    await expect(engine.listFileSizeBlockedFiles()).resolves.toEqual([
+    const fileSizeBlockedExpected = [
       {
         path: "Folder/large.md",
+        reason: "file_too_large" as const,
         encryptedSizeBytes: 12_400_000,
         maxFileSizeBytes: 10_000_000,
       },
+    ];
+    await expect(engine.listBlockedSyncFiles()).resolves.toEqual([
+      ...fileSizeBlockedExpected,
+      {
+        path: "Folder/bad:name.md",
+        reason: "incompatible_path",
+        encryptedSizeBytes: null,
+        maxFileSizeBytes: null,
+      },
+      {
+        path: "remote:only.md",
+        reason: "incompatible_path",
+        encryptedSizeBytes: null,
+        maxFileSizeBytes: null,
+      },
     ]);
+    await expect(engine.listFileSizeBlockedFiles()).resolves.toEqual(fileSizeBlockedExpected);
     await store.close();
   });
 
@@ -107,6 +155,7 @@ describe("SyncEngine", () => {
     vault.seedText("note.md", "body");
     const { engine } = createTestEngine(vault);
 
+    await expect(engine.listBlockedSyncFiles()).resolves.toEqual([]);
     await expect(engine.listFileSizeBlockedFiles()).resolves.toEqual([]);
   });
 

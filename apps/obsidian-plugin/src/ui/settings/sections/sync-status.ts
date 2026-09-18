@@ -1,7 +1,7 @@
 import { setIcon, setTooltip, Setting } from "obsidian";
 import { t } from "../../../i18n";
 import type { SynchSettingsController } from "../controller";
-import type { SynchStorageDisplayState } from "../../contracts";
+import type { SynchBlockedSyncFile, SynchStorageDisplayState } from "../../contracts";
 import { formatStorageDescription, formatSyncDescription, getStoragePercent, shouldShowSyncSpinner } from "../format";
 import {
   FileSizeBlockedWarningControls,
@@ -159,9 +159,9 @@ function createFileSizeBlockedWarningControls(
   let icon: HTMLElement | null = null;
 
   async function refresh(currentRun: number): Promise<void> {
-    let blockedFileCount = 0;
+    let blockedFiles: SynchBlockedSyncFile[];
     try {
-      blockedFileCount = (await controller.listFileSizeBlockedFiles()).length;
+      blockedFiles = await controller.listBlockedSyncFiles();
     } catch {
       return;
     }
@@ -171,7 +171,7 @@ function createFileSizeBlockedWarningControls(
 
     icon?.remove();
     icon = null;
-    if (blockedFileCount <= 0) {
+    if (blockedFiles.length === 0) {
       return;
     }
 
@@ -180,7 +180,7 @@ function createFileSizeBlockedWarningControls(
     });
     icon.setAttribute("aria-hidden", "true");
     setIcon(icon, "triangle-alert");
-    setTooltip(icon, formatFileSizeBlockedTooltip(blockedFileCount), {
+    setTooltip(icon, formatBlockedSyncTooltip(blockedFiles), {
       delay: 1,
       placement: "right",
     });
@@ -194,6 +194,18 @@ function createFileSizeBlockedWarningControls(
   };
 }
 
-function formatFileSizeBlockedTooltip(blockedFileCount: number): string {
-  return t("sync.fileSizeBlocked", { count: blockedFileCount });
+function formatBlockedSyncTooltip(blockedFiles: SynchBlockedSyncFile[]): string {
+  const incompatiblePathCount = blockedFiles.filter(
+    (file) => file.reason === "incompatible_path",
+  ).length;
+  const fileSizeCount = blockedFiles.length - incompatiblePathCount;
+
+  return [
+    fileSizeCount > 0 ? t("sync.fileSizeBlocked", { count: fileSizeCount }) : null,
+    incompatiblePathCount > 0
+      ? t("sync.incompatiblePathBlockedCount", { count: incompatiblePathCount })
+      : null,
+  ]
+    .filter((message): message is string => message !== null)
+    .join(" ");
 }

@@ -17,16 +17,15 @@ import {
 
 const DEFAULT_PULL_BATCH = 100;
 const DEFAULT_PULL_APPLY_WINDOW = 100;
-// TODO: Replace this fixed preparation cap with CPU and memory budgets, including
-// downloaded payloads waiting for apply. TransferScheduler controls network
-// concurrency separately; keep this cap until preparation is resource-bounded.
+// Group preparation is byte-budgeted; retain a separate work/network cap for
+// small files and legacy servers that do not advertise encrypted blob sizes.
 const DEFAULT_PULL_PREPARE_CONCURRENCY = 10;
 
 export interface SyncPullServiceDeps extends SyncContentRuntimeDeps {
   getSyncToken: () => Promise<SyncTokenResponse>;
   getSyncStore: () => SyncPullStore | null;
   getRemoteVaultKey: () => Uint8Array;
-  shouldApplyRemotePath?: (path: string) => boolean;
+  shouldApplyRemotePath?: (path: string, deleted: boolean) => boolean;
   shouldUseLatestRemoteVersion?: (path: string) => boolean;
   vaultAdapter: PullVaultAdapter;
   eventGate?: SyncEventGateLike;
@@ -36,6 +35,7 @@ export interface SyncPullServiceDeps extends SyncContentRuntimeDeps {
   onProgress?: (progress: SyncOperationProgress) => Promise<void>;
   onConflict?: (event: PullConflictEvent) => void;
   onRollbackDetected?: (event: PullRollbackEvent) => void;
+  onRemoteStatesChange?: () => void;
   onFileSyncStarted?: (event: {
     operation: "upsert" | "delete";
     path: string;
@@ -143,6 +143,7 @@ export class SyncPullService {
       (error: unknown) => ({ ok: false as const, error }),
     );
     let pendingPage = startPage(null, null);
+    let remoteStatesMayHaveChanged = false;
 
     try {
       while (hasMore) {
@@ -161,6 +162,7 @@ export class SyncPullService {
 
         if (window.length >= applyWindowSize || !hasMore) {
           const appliedWindow = window;
+          remoteStatesMayHaveChanged ||= window.length > 0;
           const applied = await this.entryStateApplier.applyManifestWindow(
             store,
             token,
@@ -188,6 +190,9 @@ export class SyncPullService {
     } finally {
       // Do not let background work outlive pullOnce (or its crypto/session).
       await pendingPage;
+      // Refresh host warnings once per pull, including skipped remote files and
+      // partial progress before a later failure. Empty polls need no refresh.
+      if (remoteStatesMayHaveChanged) this.deps.onRemoteStatesChange?.();
     }
 
     cursor = targetCursor ?? cursor;

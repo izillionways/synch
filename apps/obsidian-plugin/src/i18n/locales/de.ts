@@ -158,6 +158,8 @@ export const de = {
     "sync.conflictLocalSaved": ({ path }: { path: string }) => `Sync-Konflikt erkannt. Ihre lokalen Änderungen wurden in „${path}“ gespeichert.`,
     "sync.conflictRemoteKept": ({ path }: { path: string }) => `Sync-Konflikt für „${path}“ erkannt. Die Remote-Version wird behalten.`,
     "sync.fileSizeBlocked": ({ count }: { count: number }) => `${count === 1 ? "1 Datei überschreitet" : `${count} Dateien überschreiten`} das Sync-Größenlimit.`,
+    "sync.incompatiblePathBlocked": "Der Pfad dieser Datei ist nicht kompatibel und kann nicht synchronisiert werden. Benennen Sie die Datei oder den Ordner um.",
+    "sync.incompatiblePathBlockedCount": ({ count }: { count: number }) => `${count === 1 ? "1 Datei hat" : `${count} Dateien haben`} einen inkompatiblen Pfad.`,
     "sync.label": "Synchronisierung",
     "sync.now": "Jetzt synchronisieren",
     "sync.frequency": "Sync-Häufigkeit",
