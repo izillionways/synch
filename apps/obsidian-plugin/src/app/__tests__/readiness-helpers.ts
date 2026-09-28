@@ -96,6 +96,7 @@ function settings(overrides: Partial<SynchPluginSettings>): SynchPluginSettings 
     vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
     syncEnabled: true,
     syncIntervalMs: 0,
+    conflictPolicy: "conflict-copy",
     ...overrides,
   };
 }

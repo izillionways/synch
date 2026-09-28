@@ -114,7 +114,7 @@ Es richtet sich an Nutzer, die etwas näher an einer gehosteten Synchronisierung
 
 Dieser Preisunterschied zählt für Einzelpersonen, Studierende, Hobby-Nutzer und alle, die Obsidian mögen, aber kein weiteres Abo für $5/Monat wollen, nur um ein kleines Vault synchron zu halten.
 
-Die aktuellen gehosteten Pläne von Synch sind bewusst schlank. Der kostenlose Plan umfasst ein synchronisiertes Vault, 50 MB Speicher, eine maximale Dateigröße von 3 MB und 1 Tag Versionsverlauf. Der Starter-Plan umfasst ein synchronisiertes Vault, 1 GB Speicher, eine maximale Dateigröße von 5 MB und 1 Monat Versionsverlauf.
+Die aktuellen gehosteten Pläne von Synch sind bewusst schlank. Der kostenlose Plan umfasst ein synchronisiertes Vault, 30 MB Speicher, eine maximale Dateigröße von 3 MB und 1 Tag Versionsverlauf. Der Starter-Plan umfasst ein synchronisiertes Vault, 1 GB Speicher, eine maximale Dateigröße von 5 MB und 1 Monat Versionsverlauf.
 
 Der Kompromiss ist Reife. Obsidian Sync ist die offizielle, ausgereifte, erprobte Option. Synch ist neuer, Open Source und richtet sich an Nutzer, denen Kosten, Transparenz und Datenschutz wichtig genug sind, um eine jüngere Alternative zu wählen.
 

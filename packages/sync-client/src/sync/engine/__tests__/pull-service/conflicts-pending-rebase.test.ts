@@ -22,7 +22,7 @@ import {
 const conflictTimestamp = () => new Date(2026, 3, 22, 10, 11, 12).getTime();
 
 describe("SyncPullService pending upsert rebase conflict resolution", () => {
-  it("rebases clean markdown 3-way merges onto the pulled remote revision", async () => {
+  it.each([undefined, "prefer-remote"] as const)("rebases clean markdown before applying conflict policy %s", async (policy) => {
     const store = createTestSyncStore();
     const baseBody = "Title\n\noriginal line\n";
     const localBody = "Title\n\nlocal line\n";
@@ -85,6 +85,7 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
       getSyncToken: async () => createToken(),
       getSyncStore: () => store,
       getRemoteVaultKey: () => TEST_VAULT_KEY,
+      getConflictPolicy: policy === undefined ? undefined : () => policy,
       vaultAdapter: adapter,
       blobClient: client,
       onProgress: ignoreProgress,
@@ -135,7 +136,7 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
     await store.close();
   });
 
-  it("creates a conflict copy when markdown 3-way merge has overlapping edits", async () => {
+  it.each([undefined, "conflict-copy", "prefer-remote"] as const)("resolves overlapping markdown edits with policy %s", async (policy) => {
     const store = createTestSyncStore();
     const baseBody = "one\n";
     const localBody = "local\n";
@@ -196,6 +197,7 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
       getSyncToken: async () => createToken(),
       getSyncStore: () => store,
       getRemoteVaultKey: () => TEST_VAULT_KEY,
+      getConflictPolicy: policy === undefined ? undefined : () => policy,
       vaultAdapter: adapter,
       blobClient: client,
       onProgress: ignoreProgress,
@@ -215,11 +217,11 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
       entriesApplied: 1,
       filesWritten: 1,
       filesDeleted: 0,
-      conflictsCreated: 1,
+      conflictsCreated: policy === "prefer-remote" ? 0 : 1,
     });
     expect(adapter.text("Folder/note.md")).toBe(remoteBody);
     expect(adapter.text("Folder/note.sync-conflict-20260422-101112.md")).toBe(
-      localBody,
+      policy === "prefer-remote" ? null : localBody,
     );
     expect(await store.getRemoteStateById("entry-note")).toMatchObject({
       revision: 3,
@@ -232,14 +234,14 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
         entryId: "entry-note",
         reason: "local_pending_mutation",
         originalPath: "Folder/note.md",
-        conflictPath: "Folder/note.sync-conflict-20260422-101112.md",
+        conflictPath: policy === "prefer-remote" ? null : "Folder/note.sync-conflict-20260422-101112.md",
       },
     ]);
 
     await store.close();
   });
 
-  it("creates a conflict copy for non-mergeable binary paths even with a cached base blob", async () => {
+  it.each([undefined, "prefer-remote"] as const)("resolves non-mergeable binary paths with policy %s", async (policy) => {
     const store = createTestSyncStore();
     const path = "Folder/image.png";
     const conflictPath = "Folder/image.sync-conflict-20260422-101112.png";
@@ -299,6 +301,7 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
       getSyncToken: async () => createToken(),
       getSyncStore: () => store,
       getRemoteVaultKey: () => TEST_VAULT_KEY,
+      getConflictPolicy: policy === undefined ? undefined : () => policy,
       vaultAdapter: adapter,
       blobClient: client,
       onProgress: ignoreProgress,
@@ -318,10 +321,10 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
       entriesApplied: 1,
       filesWritten: 1,
       filesDeleted: 0,
-      conflictsCreated: 1,
+      conflictsCreated: policy === "prefer-remote" ? 0 : 1,
     });
     expect(adapter.bytes(path)).toEqual(remoteBytes);
-    expect(adapter.bytes(conflictPath)).toEqual(localBytes);
+    expect(adapter.bytes(conflictPath)).toEqual(policy === "prefer-remote" ? null : localBytes);
     expect(await store.getRemoteStateById("entry-image")).toMatchObject({
       revision: 3,
       blobId: "blob-remote",
@@ -333,7 +336,7 @@ describe("SyncPullService pending upsert rebase conflict resolution", () => {
         entryId: "entry-image",
         reason: "local_pending_mutation",
         originalPath: path,
-        conflictPath,
+        conflictPath: policy === "prefer-remote" ? null : conflictPath,
       },
     ]);
 

@@ -87,7 +87,7 @@ Synch 關注 Windows 和 Android 設定中的三個關鍵點：
 - **Obsidian 相容性**：同步工作流程圍繞 Obsidian vault 建構，而不是把它當作普通資料夾。
 - **易接受的價格**：小型 vault 可使用免費方案，更大的個人使用可選擇低成本 Starter 方案。
 
-目前 Synch 免費方案包含 1 個同步 vault、50 MB 儲存、3 MB 最大檔案大小和 1 天版本歷史。Starter 方案包含 1 個 vault、1 GB 儲存、5 MB 最大檔案大小和 1 個月版本歷史。
+目前 Synch 免費方案包含 1 個同步 vault、30 MB 儲存、3 MB 最大檔案大小和 1 天版本歷史。Starter 方案包含 1 個 vault、1 GB 儲存、5 MB 最大檔案大小和 1 個月版本歷史。
 
 如果你想要比 Syncthing 更簡單、比通用雲端硬碟更重視隱私的方案，Synch 很適合。
 

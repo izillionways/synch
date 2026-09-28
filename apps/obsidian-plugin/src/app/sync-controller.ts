@@ -23,6 +23,7 @@ import type {
 } from "@synch/sync-client/diagnostics";
 
 import type {
+  SyncConflictPolicy,
   SyncFileRules,
   PresenceSelection,
   VaultConfigSyncRules,
@@ -58,6 +59,7 @@ export interface SyncControllerDeps {
   invalidateSyncToken: () => void;
   getRemoteVaultKey: () => Uint8Array;
   getSyncFileRules: () => SyncFileRules;
+  getConflictPolicy?: () => SyncConflictPolicy;
   getVaultConfigSyncRules: () => VaultConfigSyncRules;
   getSyncIntervalMs: () => number;
   hasActiveRemoteVaultSession: () => boolean;
@@ -102,6 +104,7 @@ export class SyncController {
     invalidateSyncToken: () => this.deps.invalidateSyncToken(),
     getRemoteVaultKey: () => this.deps.getRemoteVaultKey(),
     getSyncFileRules: () => this.deps.getSyncFileRules(),
+    getConflictPolicy: () => this.deps.getConflictPolicy?.() ?? "conflict-copy",
     getVaultConfigSyncRules: () => this.deps.getVaultConfigSyncRules(),
     shouldDeferSyncWork: () => this.deps.getSyncIntervalMs() > 0,
     hasActiveRemoteVaultSession: () => this.deps.hasActiveRemoteVaultSession(),

@@ -85,9 +85,9 @@ describe("SynchSettingTab sync status", () => {
       ?.click();
 
     expect(createRemoteVaultFromPrompt).toHaveBeenCalledTimes(1);
-    expect(getSettingNames()).toContain(t("vault.setting"));
+    expect(getSettingNames()).not.toContain(t("vault.setting"));
     expect(getButtonComponents().map((button) => button.text)).toContain(
-      t("vault.disconnect"),
+      t("sync.disconnect"),
     );
   });
 
@@ -109,9 +109,9 @@ describe("SynchSettingTab sync status", () => {
       ?.click();
 
     expect(connectRemoteVaultFromPrompt).toHaveBeenCalledTimes(1);
-    expect(getSettingNames()).toContain(t("vault.setting"));
+    expect(getSettingNames()).not.toContain(t("vault.setting"));
     expect(getButtonComponents().map((button) => button.text)).toContain(
-      t("vault.disconnect"),
+      t("sync.disconnect"),
     );
   });
 
@@ -123,11 +123,9 @@ describe("SynchSettingTab sync status", () => {
 
     tab.open();
 
-    expect(getSettingNames().slice(0, 4)).toEqual([
+    expect(getSettingNames()).toEqual([
       t("sync.label"),
       t("authentication"),
-      t("subscription.label"),
-      t("vault.manage"),
     ]);
   });
 
@@ -261,10 +259,34 @@ describe("SynchSettingTab sync status", () => {
 
     tab.open();
 
-    expect(getButtonComponents()[0]?.text).toBe(t("sync.stop"));
-    await getButtonComponents()[0]?.click();
+    expect(getButtonComponents()[0]?.text).toBe(t("sync.disconnect"));
+    expect(getButtonComponents()[1]?.text).toBe(t("sync.stop"));
+    await getButtonComponents()[1]?.click();
     expect(setSyncEnabled).toHaveBeenCalledWith(false);
     expect(getExtraButtonComponents()).toEqual([]);
+  });
+
+  it("offers conflict policies and persists changes through the controller", async () => {
+    const setConflictPolicy = vi.fn(async () => {});
+    const tab = createSettingsTab({
+      hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
+      getConflictPolicy: () => "prefer-remote",
+      setConflictPolicy,
+    });
+    tab.open();
+
+    expect(getSettingNames().at(-2)).toBe(t("sync.conflictPolicy"));
+    const dropdown = getDropdownComponents().find((control) => control.options.has("prefer-remote"));
+    expect(dropdown?.value).toBe("prefer-remote");
+    expect([...dropdown?.options.entries() ?? []]).toEqual([
+      ["conflict-copy", t("sync.conflictPolicyCopy")],
+      ["prefer-remote", t("sync.conflictPolicyRemote")],
+    ]);
+    await dropdown?.change("conflict-copy");
+    expect(setConflictPolicy).toHaveBeenCalledWith("conflict-copy");
+    await tab.setControlValue("conflictPolicy", "invalid");
+    expect(setConflictPolicy).toHaveBeenLastCalledWith("conflict-copy");
   });
 
   it("shows sync diagnostics after the sync frequency section", async () => {
@@ -278,7 +300,7 @@ describe("SynchSettingTab sync status", () => {
 
     tab.open();
 
-    expect(getSettingNames().at(-2)).toBe(t("sync.frequency"));
+    expect(getSettingNames().at(-3)).toBe(t("sync.frequency"));
     expect(getSettingNames().at(-1)).toBe(t("diagnostics.header"));
     const dropdown = getDropdownComponents()[0];
     expect(dropdown?.value).toBe("180000");
@@ -498,11 +520,12 @@ describe("SynchSettingTab sync status", () => {
 
     tab.open();
 
-    expect(getButtonComponents()[0]?.text).toBe(t("sync.start"));
+    expect(getButtonComponents()[0]?.text).toBe(t("sync.disconnect"));
+    expect(getButtonComponents()[1]?.text).toBe(t("sync.start"));
     expect(getSettingDescriptions()[0]).toBe(
       `${t("sync.state.paused")} - 12 / 12`,
     );
-    await getButtonComponents()[0]?.click();
+    await getButtonComponents()[1]?.click();
     expect(setSyncEnabled).toHaveBeenCalledWith(true);
     expect(getExtraButtonComponents()).toEqual([]);
   });

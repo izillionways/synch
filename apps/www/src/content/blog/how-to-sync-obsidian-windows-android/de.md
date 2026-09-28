@@ -87,7 +87,7 @@ Synch konzentriert sich auf drei Punkte, die für eine Windows-und-Android-Einri
 - **Obsidian-Kompatibilität**: Der Sync-Ablauf ist um Obsidian-Vaults herum gebaut, nicht um beliebige Ordner.
 - **Zugängliche Preise**: Es gibt einen Free-Plan für kleine Vaults und einen günstigen Starter-Plan für größeren privaten Gebrauch.
 
-Der aktuelle Free-Plan von Synch umfasst ein synchronisiertes Vault, 50 MB Speicher, 3 MB maximale Dateigröße und 1 Tag Versionsverlauf. Der Starter-Plan umfasst ein synchronisiertes Vault, 1 GB Speicher, 5 MB maximale Dateigröße und 1 Monat Versionsverlauf.
+Der aktuelle Free-Plan von Synch umfasst ein synchronisiertes Vault, 30 MB Speicher, 3 MB maximale Dateigröße und 1 Tag Versionsverlauf. Der Starter-Plan umfasst ein synchronisiertes Vault, 1 GB Speicher, 5 MB maximale Dateigröße und 1 Monat Versionsverlauf.
 
 Synch passt gut, wenn Sie etwas Einfacheres als Syncthing und Datenschutzbewussteres als einen allgemeinen Cloud-Speicher wollen.
 

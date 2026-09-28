@@ -104,7 +104,13 @@ export class PullPendingMutationHandler {
 
     let conflictPath: string | null = null;
     let conflictBytes: Uint8Array | null = null;
-    if (pending.op === "upsert" && (await this.deps.vaultAdapter.exists(metadata.path))) {
+    // Only consult the fallback policy after attempting a clean text merge.
+    // Path collisions and rollback protection are handled separately.
+    if (
+      this.deps.getConflictPolicy?.() !== "prefer-remote" &&
+      pending.op === "upsert" &&
+      (await this.deps.vaultAdapter.exists(metadata.path))
+    ) {
       conflictBytes = await this.contentRuntime.withReadBytes(
         await this.deps.vaultAdapter.getFileSize(metadata.path),
         async () => await this.deps.vaultAdapter.readBytes(metadata.path),

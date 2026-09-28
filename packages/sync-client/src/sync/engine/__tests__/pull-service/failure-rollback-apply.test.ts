@@ -18,12 +18,12 @@ import {
 } from "./helpers";
 
 describe("SyncPullService failure rollback: apply", () => {
-  it("keeps the pending edit when a clean text merge write fails", async () => {
+  it.each(["clean-merge", "prefer-remote"] as const)("keeps the pending edit when applying %s fails", async (mode) => {
     const store = createTestSyncStore();
     const path = "Folder/note.md";
     const baseBody = "Title\n\noriginal line\n";
     const localBody = "Title\n\nlocal line\n";
-    const remoteBody = "Remote title\n\noriginal line\n";
+    const remoteBody = mode === "prefer-remote" ? "Title\n\nremote line\n" : "Remote title\n\noriginal line\n";
     const baseHash = await hashText(baseBody);
     const localHash = await hashText(localBody);
     const remoteHash = await hashText(remoteBody);
@@ -81,6 +81,7 @@ describe("SyncPullService failure rollback: apply", () => {
       getSyncToken: async () => createToken(),
       getSyncStore: () => store,
       getRemoteVaultKey: () => TEST_VAULT_KEY,
+      getConflictPolicy: () => mode === "prefer-remote" ? "prefer-remote" : "conflict-copy",
       vaultAdapter: failingAdapter,
       blobClient: createBlobClient({
         blobs: {

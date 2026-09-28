@@ -8,11 +8,27 @@ import { SYNCH_SETTINGS_KEY } from "./schema";
 import { SynchSettingsStore } from "./store";
 
 describe("SynchSettingsStore", () => {
+  it("persists conflict policy changes, preserves other settings, and skips unchanged saves", async () => {
+    const pluginDataStore = new MemoryPluginDataStore({ syncIntervalMs: 180_000 });
+    const store = new SynchSettingsStore(pluginDataStore);
+    const initial = store.initialize();
+
+    expect(await store.updateConflictPolicy("prefer-remote")).toBe(true);
+    expect(pluginDataStore.read(SYNCH_SETTINGS_KEY)).toEqual({ ...initial, conflictPolicy: "prefer-remote" });
+    expect(await store.updateConflictPolicy("prefer-remote")).toBe(false);
+    expect(pluginDataStore.saveCount).toBe(1);
+    expect(new SynchSettingsStore(pluginDataStore).initialize().conflictPolicy).toBe("prefer-remote");
+
+    expect(await store.updateConflictPolicy("conflict-copy")).toBe(true);
+    expect(store.getSnapshot()).toEqual(initial);
+  });
+
   it("preserves file rules when updating the API base URL", async () => {
     const pluginDataStore = new MemoryPluginDataStore({
       apiBaseUrl: "https://api.synch.test",
       syncEnabled: false,
       syncIntervalMs: 0,
+      conflictPolicy: "conflict-copy",
       fileRules: {
         ...DEFAULT_SYNC_FILE_RULES,
         includeImages: false,
@@ -35,6 +51,7 @@ describe("SynchSettingsStore", () => {
       },
       vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
       syncIntervalMs: 0,
+      conflictPolicy: "conflict-copy",
     });
   });
 
@@ -61,6 +78,7 @@ describe("SynchSettingsStore", () => {
       },
       vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
       syncIntervalMs: 0,
+      conflictPolicy: "conflict-copy",
     });
   });
 
@@ -146,6 +164,7 @@ describe("SynchSettingsStore", () => {
       },
       vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
       syncIntervalMs: 0,
+      conflictPolicy: "conflict-copy",
     });
     const store = new SynchSettingsStore(pluginDataStore, "https://default.synch.test");
     store.initialize();
@@ -161,6 +180,7 @@ describe("SynchSettingsStore", () => {
       },
       vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
       syncIntervalMs: 0,
+      conflictPolicy: "conflict-copy",
     });
   });
 
@@ -183,6 +203,7 @@ describe("SynchSettingsStore", () => {
       apiBaseUrl: "https://custom.synch.test",
       syncEnabled: true,
       syncIntervalMs: 0,
+      conflictPolicy: "conflict-copy",
       fileRules: DEFAULT_SYNC_FILE_RULES,
       vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
     });

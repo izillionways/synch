@@ -1,3 +1,4 @@
+import type { SyncConflictPolicy } from "../core/conflict-policy";
 import {
   isOffline as detectOffline,
   type OfflineDetector,
@@ -91,6 +92,7 @@ export interface SyncEngineDeps {
   getSyncToken: () => Promise<SyncTokenResponse>;
   invalidateSyncToken: () => void;
   getRemoteVaultKey: () => Uint8Array;
+  getConflictPolicy?: () => SyncConflictPolicy;
   getSyncFileRules: () => SyncFileRules;
   getVaultConfigSyncRules: () => VaultConfigSyncRules;
   shouldDeferSyncWork: () => boolean;
@@ -318,6 +320,7 @@ export class SyncEngine {
       },
     });
     this.syncPullService = new SyncPullService({
+      getConflictPolicy: this.deps.getConflictPolicy,
       onRemoteStatesChange: () => this.deps.onFileSizeBlockedFilesChange?.(),
       getSyncToken: async () => await this.deps.getSyncToken(),
       getSyncStore: () => this.syncStore,

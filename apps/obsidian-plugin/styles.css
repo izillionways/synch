@@ -186,8 +186,39 @@
   }
 }
 
+button.synch-button-loading {
+  position: relative;
+  color: transparent !important;
+}
+
+button.synch-button-loading > * {
+  visibility: hidden;
+}
+
+button.synch-button-loading > .synch-button-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: visible;
+  color: var(--text-normal);
+  pointer-events: none;
+}
+
+button.mod-cta.synch-button-loading > .synch-button-spinner {
+  color: var(--text-on-accent);
+}
+
+.synch-button-spinner svg {
+  width: 1em;
+  height: 1em;
+  animation: synch-spin 0.9s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .synch-sync-spinner {
+  .synch-sync-spinner,
+  .synch-button-spinner svg {
     animation: none;
   }
 }
@@ -563,4 +594,344 @@
   border-radius: 2px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+/* Vault connection: choose a vault, then complete one focused step. */
+.synch-connect-modal {
+  width: 480px;
+  max-width: calc(100vw - 32px);
+}
+
+.synch-connect {
+  padding: 4px 8px 8px;
+}
+
+.synch-connect h2 {
+  margin: 0 0 20px;
+  font-size: 1.4em;
+  font-weight: var(--font-medium);
+  overflow-wrap: anywhere;
+}
+
+/* Override Obsidian 1.13 modal row chrome, not other plugin settings. */
+.modal.synch-connect-modal .synch-connect .setting-item:not(.setting-item-heading) {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.synch-connect-group {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-normal);
+  margin: 24px 0 8px;
+}
+
+.synch-connect-choice .setting-item-info,
+.synch-connect-primary .setting-item-info,
+.synch-connect-secondary .setting-item-info,
+.synch-connect-back .setting-item-info {
+  display: none;
+}
+
+.synch-connect-choice .setting-item-control,
+.synch-connect-primary .setting-item-control,
+.synch-connect-field .setting-item-control {
+  width: 100%;
+}
+
+.synch-connect-choice button {
+  width: 100%;
+  height: auto;
+  min-height: 68px;
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: none;
+  text-align: left;
+}
+
+.synch-connect-choice button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.synch-connect-choice-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.synch-connect-choice-meta,
+.synch-connect-eyebrow {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.synch-connect-vault-icon,
+.synch-connect-chevron {
+  color: var(--text-muted);
+  display: flex;
+  flex-shrink: 0;
+}
+
+.synch-connect-vault-icon svg,
+.synch-connect-chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+.synch-connect .synch-connect-back {
+  margin-bottom: 20px;
+}
+
+.synch-connect-back .setting-item-control {
+  justify-content: flex-start;
+}
+
+.synch-connect-back button,
+.synch-connect-secondary button {
+  color: var(--text-muted);
+  background: transparent;
+  box-shadow: none;
+  padding: 4px 0;
+  font-size: var(--font-ui-small);
+  height: auto;
+  white-space: normal;
+}
+
+.synch-connect-back button:hover,
+.synch-connect-secondary button:hover {
+  color: var(--text-normal);
+}
+
+.synch-connect-eyebrow {
+  margin: 0 0 6px;
+}
+
+.synch-connect-hint {
+  color: var(--text-muted);
+  margin: 12px 0 20px;
+}
+
+.synch-connect .synch-connect-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.synch-connect-field .setting-item-info {
+  margin: 0;
+}
+
+.synch-connect-field input {
+  width: 100%;
+  min-height: 40px;
+}
+
+.synch-connect .synch-connect-primary {
+  margin-top: 24px;
+}
+
+.synch-connect-primary button {
+  width: 100%;
+  min-height: 40px;
+  height: auto;
+  white-space: normal;
+  padding: 10px 14px;
+}
+
+.synch-connect .synch-connect-secondary {
+  margin-top: 14px;
+}
+
+.synch-connect-help {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-top: 24px;
+}
+
+.synch-connect-help summary {
+  cursor: var(--cursor);
+}
+
+.synch-connect-code {
+  display: block;
+  padding: 14px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  overflow-wrap: anywhere;
+  white-space: normal;
+  user-select: text;
+}
+
+.synch-connect-status {
+  font-size: var(--font-ui-medium);
+  margin: 24px 0 8px;
+}
+
+.synch-connect-notice {
+  padding: 14px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.synch-connect .synch-modal-error {
+  margin: 14px 0 0;
+}
+
+.synch-connect .synch-modal-error:empty {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .synch-connect button {
+    min-height: 44px;
+  }
+}
+
+.synch-sharing-modal {
+  width: 590px;
+  max-width: calc(100vw - 32px);
+}
+
+.synch-sharing h2 {
+  margin: 0 0 8px;
+  font-size: var(--font-ui-large);
+}
+
+.synch-sharing-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.synch-sharing-vault + .synch-sharing-vault {
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: 24px;
+  padding-top: 8px;
+}
+
+.synch-sharing-vault-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 24px 0 20px;
+}
+
+.synch-sharing-vault-heading {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+
+.synch-sharing-vault-heading h3 {
+  font-size: var(--font-ui-medium);
+  margin: 0;
+}
+
+.synch-sharing-vault-icon {
+  display: flex;
+  padding: 10px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+}
+
+.synch-sharing-badge {
+  padding: 3px 7px;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.synch-sharing-panel {
+  padding: 16px 0 8px;
+}
+
+.synch-sharing-empty {
+  text-align: center;
+  padding: 20px 8px;
+}
+
+.synch-sharing-empty > span {
+  color: var(--text-muted);
+}
+
+.synch-sharing-empty p {
+  margin: 8px 0;
+}
+
+.modal.synch-sharing-modal .synch-sharing .setting-item {
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 0;
+}
+
+.synch-sharing-panel .setting-item-control {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 8px;
+}
+
+.synch-sharing-panel input {
+  width: 100%;
+  min-width: 0;
+}
+
+.synch-sharing-footer {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 16px;
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.modal.synch-sharing-modal .synch-sharing-footer .setting-item {
+  padding: 0;
+}
+
+.synch-sharing-footer .setting-item-info {
+  display: none;
+}
+
+.synch-sharing-footer .setting-item:last-child {
+  margin-left: auto;
+}
+
+.synch-sharing-footer .synch-sharing-web-link {
+  color: var(--text-accent);
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  white-space: normal;
+  text-align: start;
+}
+
+.synch-sharing-web-link span {
+  display: inline-flex;
+  margin-left: 6px;
+}
+
+.synch-sharing-web-link svg {
+  width: 14px;
+  height: 14px;
 }

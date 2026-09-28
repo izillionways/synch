@@ -14,6 +14,7 @@ const settingNames: string[] = [];
 const settingDescriptions: string[] = [];
 const settingClasses: string[][] = [];
 const createdElements: StoredElementRecord[] = [];
+const openModals: Modal[] = [];
 const notices: Array<{ message: string; timeout?: number }> = [];
 
 interface CreatedElementRecord {
@@ -44,6 +45,12 @@ class MockElement {
 
   addClass(value: string): void {
     this.record?.classes.push(value);
+  }
+
+  removeClass(value: string): void {
+    if (this.record) {
+      this.record.classes = this.record.classes.filter((name) => name !== value);
+    }
   }
 
   createEl(tag: string, options?: { text?: string; cls?: string }): MockElement {
@@ -105,6 +112,7 @@ class MockElement {
 }
 
 export class MockButtonComponent {
+  buttonEl = new MockElement();
   text = "";
   disabled = false;
   private clickCallback: (() => void | Promise<void>) | null = null;
@@ -148,6 +156,7 @@ export class MockTextComponent {
     value: "",
     autocomplete: "",
     readOnly: false,
+    setAttribute(_name: string, _value: string): void {},
     rows: 0,
     classList: {
       add(_value: string): void {},
@@ -312,7 +321,7 @@ export class App {
   secretStorage = {
     getSecret: (key: string): string | undefined => this.secrets.get(key),
     setSecret: (key: string, value: string): void => {
-      if (!/^[a-z0-9-]+$/.test(key)) {
+      if (!/^[a-z0-9-]{1,64}$/.test(key)) {
         throw new Error("Invalid secret ID");
       }
 
@@ -384,16 +393,20 @@ export class Plugin {
 export const editorInfoField = {};
 
 export class Modal {
+  modalEl = new MockElement();
   containerEl = new MockElement();
   contentEl = new MockElement();
 
   constructor(public app: unknown) {}
 
   open(): void {
+    openModals.push(this);
     this.onOpen();
   }
 
   close(): void {
+    const index = openModals.indexOf(this);
+    if (index >= 0) openModals.splice(index, 1);
     this.onClose();
   }
 
@@ -684,7 +697,12 @@ export function getNotices(): Array<{ message: string; timeout?: number }> {
   return notices.map((notice) => ({ ...notice }));
 }
 
+export function getOpenModals(): Modal[] {
+  return [...openModals];
+}
+
 export function resetObsidianMocks(): void {
+  openModals.length = 0;
   requestUrlMock = null;
   language = "en";
   buttonComponents.length = 0;

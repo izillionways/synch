@@ -8,6 +8,8 @@ import {
   SYNCH_SETTINGS_KEY,
 } from "./schema";
 import {
+  normalizeSyncConflictPolicy,
+  type SyncConflictPolicy,
   normalizeSyncFileRules,
   type SyncFileRules,
   normalizeVaultConfigSyncRules,
@@ -104,6 +106,18 @@ export class SynchSettingsStore {
       ...this.settings,
       syncEnabled: enabled,
     };
+    this.pluginDataStore.write(SYNCH_SETTINGS_KEY, this.settings);
+    await this.pluginDataStore.save();
+    return true;
+  }
+
+  async updateConflictPolicy(value: SyncConflictPolicy): Promise<boolean> {
+    const conflictPolicy = normalizeSyncConflictPolicy(value);
+    if (conflictPolicy === this.settings.conflictPolicy) {
+      return false;
+    }
+
+    this.settings = { ...this.settings, conflictPolicy };
     this.pluginDataStore.write(SYNCH_SETTINGS_KEY, this.settings);
     await this.pluginDataStore.save();
     return true;

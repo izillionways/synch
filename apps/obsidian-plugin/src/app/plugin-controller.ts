@@ -1,8 +1,11 @@
+import { ObsidianKeyReceiverStore } from "../adapters/key-receiver-storage";
+import { SharingModal } from "../ui/sharing/sharing-modal";
 import type { UserVisibleSyncProgress } from "@synch/sync-client/engine";
 import { Notice, type Plugin, TFolder } from "obsidian";
 
 import { SynchReadinessCoordinator } from "./readiness-coordinator";
 import { SynchPluginSessionStore } from "./session-store";
+import { SynchOrganizationRoleService } from "./organization-role-service";
 import { SynchSubscriptionService } from "./subscription-service";
 import { SynchPluginUpdateService } from "./update-service";
 import { defaultHttpClient } from "../adapters/http";
@@ -13,6 +16,8 @@ import {
 import { AuthClient, AuthManager, type AuthReadiness } from "@synch/sync-client/auth";
 import {
   RemoteVaultClient,
+  SharingClient,
+  SharingManager,
   SyncAccessClient,
   type SyncTokenResponse,
   SyncTokenManager,
@@ -58,6 +63,7 @@ import {
   normalizeSyncFileRules,
   normalizeVaultPath,
   type SyncFileRules,
+  type SyncConflictPolicy,
   type VaultConfigSyncRules,
   isReservedSyncPath,
   type PresenceSelection,
@@ -104,7 +110,16 @@ export class SynchPluginController implements SynchSettingsController {
       new Notice(message, timeout);
     },
   });
+  private readonly organizationRoleService = new SynchOrganizationRoleService({
+    getOrganizationId: () => this.remoteVaultManager.getActiveSession()?.summary.organizationId,
+    getApiBaseUrl: () => this.getApiBaseUrl(),
+    hasAuthenticatedSession: () => this.hasAuthenticatedSession(),
+    getAuthSessionToken: () => this.authManager.getAuthSessionToken(),
+    refreshUi: () => this.refreshUi(),
+  });
+
   private readonly subscriptionService = new SynchSubscriptionService({
+    getOrganizationId: () => this.remoteVaultManager.getActiveSession()?.summary.organizationId,
     getApiBaseUrl: () => this.getApiBaseUrl(),
     hasAuthenticatedSession: () => this.hasAuthenticatedSession(),
     getAuthSessionToken: () => this.authManager.getAuthSessionToken(),
@@ -165,6 +180,7 @@ export class SynchPluginController implements SynchSettingsController {
     getSyncFileRules: () => this.getSyncFileRules(),
     getVaultConfigSyncRules: () => this.getVaultConfigSyncRules(),
     getSyncIntervalMs: () => this.getSyncIntervalMs(),
+    getConflictPolicy: () => this.getConflictPolicy(),
     hasActiveRemoteVaultSession: () => this.hasActiveRemoteVaultSession(),
     hasConnectedRemoteVault: () => this.hasConnectedRemoteVault(),
     hasAuthenticatedSession: () => this.hasAuthenticatedSession(),
@@ -246,6 +262,7 @@ export class SynchPluginController implements SynchSettingsController {
     getApiBaseUrl: () => this.getApiBaseUrl(),
     getSyncFileRules: () => this.getSyncFileRules(),
     getStoredRemoteVaultId: () => this.sessionStore.getStoredRemoteVaultId(),
+    createVaultAccessContext: () => this.createVaultAccessContext(),
     hasConnectedRemoteVault: () => this.hasConnectedRemoteVault(),
     initializeSyncStoreForActiveRemoteVault: async () => {
       await this.readinessCoordinator.initializeSyncStoreForActiveRemoteVault();
@@ -322,6 +339,18 @@ export class SynchPluginController implements SynchSettingsController {
 
   async retryCommunityPluginUpdateCheck(): Promise<void> {
     await this.updateService.retryCommunityPluginUpdateCheck();
+  }
+
+  getOrganizationRole(): string | null {
+    return this.organizationRoleService.getOrganizationRole();
+  }
+
+  isOrganizationRoleApiUnavailable(): boolean {
+    return this.organizationRoleService.isOrganizationRoleApiUnavailable();
+  }
+
+  async ensureOrganizationRoleCheck(): Promise<void> {
+    await this.organizationRoleService.ensureOrganizationRoleCheck();
   }
 
   getSubscriptionStatus(): SynchSubscriptionStatus {
@@ -427,6 +456,16 @@ export class SynchPluginController implements SynchSettingsController {
       this.refreshUi();
     }
     await this.ensureAutoSyncState();
+  }
+
+  getConflictPolicy(): SyncConflictPolicy {
+    return this.settingsStore.getSnapshot().conflictPolicy;
+  }
+
+  async setConflictPolicy(value: SyncConflictPolicy): Promise<void> {
+    if (await this.settingsStore.updateConflictPolicy(value)) {
+      this.refreshUi();
+    }
   }
 
   getSyncIntervalMs(): number {
@@ -643,6 +682,31 @@ export class SynchPluginController implements SynchSettingsController {
 
   async connectRemoteVaultFromPrompt(): Promise<void> {
     await this.remoteVaultController.connectRemoteVaultFromPrompt();
+  }
+
+  private async createVaultAccessContext() {
+    const apiBaseUrl = this.getApiBaseUrl();
+    const token = this.authManager.getAuthSessionToken();
+    const isCurrentAccount = () => this.getApiBaseUrl() === apiBaseUrl && this.authManager.getAuthSessionToken() === token;
+    const user = await new AuthClient(defaultHttpClient, "synch-obsidian-plugin").getAuthenticatedUser(apiBaseUrl, token);
+    if (!isCurrentAccount()) throw new Error(t("sharing.accountChanged"));
+    if (!user) throw new Error("Sign in before managing vault access.");
+    const manager = new SharingManager(new SharingClient(defaultHttpClient, apiBaseUrl, token), user.userId, new ObsidianKeyReceiverStore(this.plugin));
+    return { manager, isCurrentAccount };
+  }
+
+  async openVaultSharing(): Promise<void> {
+    try {
+      const { manager, isCurrentAccount } = await this.createVaultAccessContext();
+      const apiBaseUrl = manager.client.apiBaseUrl;
+      new SharingModal(this.plugin.app, manager, () => this.remoteVaultManager.getActiveSession(), isCurrentAccount, () => {
+        const url = new URL("/organizations", apiBaseUrl);
+        const organizationId = this.remoteVaultManager.getActiveSession()?.summary.organizationId;
+        if (organizationId) url.searchParams.set("organizationId", organizationId);
+        url.searchParams.set("lang", getSynchLocale());
+        openExternalUrl(url.toString());
+      }).open();
+    } catch (error) { this.notifyError(error, "error.vaultConnection"); }
   }
 
   openRemoteVaultManagementPage(): void {

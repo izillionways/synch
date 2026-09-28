@@ -105,7 +105,7 @@ Synch is an open-source, end-to-end encrypted sync service for Obsidian. It is d
 Synch has a free plan, so you can start syncing an Obsidian vault without paying. The current free plan includes:
 
 - 1 synced vault
-- 50 MB storage
+- 30 MB storage
 - 3 MB maximum file size
 - 1 day of version history
 

@@ -1,5 +1,7 @@
 import { getDefaultApiBaseUrl, normalizeApiBaseUrl } from "../config";
 import {
+  normalizeSyncConflictPolicy,
+  type SyncConflictPolicy,
   DEFAULT_SYNC_FILE_RULES,
   normalizeSyncFileRules,
   type SyncFileRules,
@@ -28,6 +30,7 @@ export interface SynchPluginSettings {
   vaultConfigSync: VaultConfigSyncRules;
   syncEnabled: boolean;
   syncIntervalMs: number;
+  conflictPolicy: SyncConflictPolicy;
 }
 
 export const DEFAULT_SYNCH_PLUGIN_SETTINGS: SynchPluginSettings = {
@@ -36,6 +39,7 @@ export const DEFAULT_SYNCH_PLUGIN_SETTINGS: SynchPluginSettings = {
   vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
   syncEnabled: true,
   syncIntervalMs: REALTIME_SYNC_INTERVAL_MS,
+  conflictPolicy: "conflict-copy",
 };
 
 export function normalizeSynchPluginSettings(
@@ -49,6 +53,7 @@ export function normalizeSynchPluginSettings(
       vaultConfigSync: DEFAULT_VAULT_CONFIG_SYNC_RULES,
       syncEnabled: true,
       syncIntervalMs: REALTIME_SYNC_INTERVAL_MS,
+      conflictPolicy: "conflict-copy",
     };
   }
 
@@ -59,6 +64,7 @@ export function normalizeSynchPluginSettings(
     vaultConfigSync: normalizeVaultConfigSyncRules(record.vaultConfigSync),
     syncEnabled: typeof record.syncEnabled === "boolean" ? record.syncEnabled : true,
     syncIntervalMs: normalizeSyncIntervalMs(record.syncIntervalMs),
+    conflictPolicy: normalizeSyncConflictPolicy(record.conflictPolicy),
   };
 }
 

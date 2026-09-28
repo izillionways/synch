@@ -334,7 +334,7 @@ describe("SyncPullService pending upsert conflict resolution", () => {
     await store.close();
   });
 
-  it("preserves pending local upserts before applying conflicting remote changes", async () => {
+  it.each([undefined, "prefer-remote"] as const)("resolves pending upserts without a cached base using policy %s", async (policy) => {
     const store = createTestSyncStore();
     const adapter = createVaultAdapter({
       "Folder/note.md": "local body",
@@ -404,6 +404,7 @@ describe("SyncPullService pending upsert conflict resolution", () => {
       getSyncToken: async () => createToken(),
       getSyncStore: () => store,
       getRemoteVaultKey: () => TEST_VAULT_KEY,
+      getConflictPolicy: policy === undefined ? undefined : () => policy,
       vaultAdapter: adapter,
       blobClient: client,
       onProgress: ignoreProgress,
@@ -421,14 +422,14 @@ describe("SyncPullService pending upsert conflict resolution", () => {
       entriesApplied: 1,
       filesWritten: 1,
       filesDeleted: 0,
-      conflictsCreated: 1,
+      conflictsCreated: policy === "prefer-remote" ? 0 : 1,
     });
     expect(adapter.text("Folder/note.md")).toBe("remote body");
-    expect(adapter.text("Folder/note.sync-conflict-20260422-101112.md")).toBe("local body");
+    expect(adapter.text("Folder/note.sync-conflict-20260422-101112.md")).toBe(policy === "prefer-remote" ? null : "local body");
     expect(conflicts).toEqual([
       {
         originalPath: "Folder/note.md",
-        conflictPath: "Folder/note.sync-conflict-20260422-101112.md",
+        conflictPath: policy === "prefer-remote" ? null : "Folder/note.sync-conflict-20260422-101112.md",
       },
     ]);
     expect(await store.listDirtyEntries()).toEqual([]);

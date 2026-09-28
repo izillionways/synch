@@ -1,3 +1,4 @@
+import type { SyncConflictPolicy } from "../core/conflict-policy";
 import type { SyncTokenResponse } from "../remote/client";
 import type { SyncContentRuntimeDeps } from "../core/content-runtime";
 import type { SyncEventGateLike } from "./event-gate";
@@ -25,6 +26,7 @@ export interface SyncPullServiceDeps extends SyncContentRuntimeDeps {
   getSyncToken: () => Promise<SyncTokenResponse>;
   getSyncStore: () => SyncPullStore | null;
   getRemoteVaultKey: () => Uint8Array;
+  getConflictPolicy?: () => SyncConflictPolicy;
   shouldApplyRemotePath?: (path: string, deleted: boolean) => boolean;
   shouldUseLatestRemoteVersion?: (path: string) => boolean;
   vaultAdapter: PullVaultAdapter;
@@ -75,6 +77,7 @@ export class SyncPullService {
       contentRuntime: this.deps.contentRuntime,
       shouldApplyRemotePath: this.deps.shouldApplyRemotePath,
       shouldUseLatestRemoteVersion: this.deps.shouldUseLatestRemoteVersion,
+      getConflictPolicy: this.deps.getConflictPolicy,
       prepareConcurrency:
         this.deps.prepareConcurrency ?? DEFAULT_PULL_PREPARE_CONCURRENCY,
       onConflict: this.deps.onConflict,

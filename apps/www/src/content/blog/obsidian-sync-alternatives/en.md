@@ -114,7 +114,7 @@ It is designed for users who want something closer to a hosted sync experience, 
 
 That price difference matters for solo users, students, hobbyists, and people who like Obsidian but do not want another $5/month subscription just to keep a small vault in sync.
 
-Synch's current hosted plans are intentionally lightweight. The free plan includes one synced vault, 50 MB of storage, a 3 MB maximum file size, and 1 day of version history. The Starter plan includes one synced vault, 1 GB of storage, a 5 MB maximum file size, and 1 month of version history.
+Synch's current hosted plans are intentionally lightweight. The free plan includes one synced vault, 30 MB of storage, a 3 MB maximum file size, and 1 day of version history. The Starter plan includes one synced vault, 1 GB of storage, a 5 MB maximum file size, and 1 month of version history.
 
 The tradeoff is maturity. Obsidian Sync is the official, polished, battle-tested option. Synch is newer, open-source, and aimed at users who value cost, transparency, and privacy enough to choose a younger alternative.
 

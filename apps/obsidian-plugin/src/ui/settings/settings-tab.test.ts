@@ -309,10 +309,52 @@ describe("SynchSettingTab", () => {
     expect(updateApiBaseUrl).not.toHaveBeenCalled();
   });
 
-  it("shows subscription status after sign-in", () => {
+  it.each([
+    ["owner", true, true],
+    ["admin", false, true],
+    ["member", false, false],
+    [null, false, false],
+  ] as const)("limits management settings for organization role %s", (role, subscription, management) => {
     const ensureSubscriptionStatusCheck = vi.fn(async () => {});
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
+      getOrganizationRole: () => role,
+      ensureSubscriptionStatusCheck,
+    });
+
+    tab.open();
+
+    expect(getSettingNames().includes(t("subscription.label"))).toBe(subscription);
+    expect(getSettingNames().includes(t("vault.manage"))).toBe(management);
+    expect(ensureSubscriptionStatusCheck).toHaveBeenCalledTimes(management ? 1 : 0);
+    expect(getSettingNames()).toContain(t("sync.label"));
+  });
+
+  it.each([
+    ["https://server.example", true, true],
+    ["https://server.example", false, false],
+    ["https://api.synch.run", true, false],
+  ] as const)("preserves legacy management for %s only when the API is unavailable (%s)", (url, unavailable, management) => {
+    const tab = createSettingsTab({
+      hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
+      getApiBaseUrl: () => url,
+      getOrganizationRole: () => null,
+      isOrganizationRoleApiUnavailable: () => unavailable,
+    });
+
+    tab.open();
+
+    expect(getSettingNames().includes(t("vault.manage"))).toBe(management);
+    expect(getSettingNames()).not.toContain(t("subscription.label"));
+  });
+
+  it("shows subscription status after vault connection", () => {
+    const ensureSubscriptionStatusCheck = vi.fn(async () => {});
+    const tab = createSettingsTab({
+      hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
       ensureSubscriptionStatusCheck,
     });
 
@@ -327,6 +369,7 @@ describe("SynchSettingTab", () => {
     const ensureSubscriptionStatusCheck = vi.fn(async () => {});
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
       getApiBaseUrl: () => "https://custom.synch.test",
       ensureSubscriptionStatusCheck,
     });
@@ -342,6 +385,7 @@ describe("SynchSettingTab", () => {
     const openPricingPage = vi.fn();
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
       getSubscriptionStatus: () => ({
         state: "loaded",
         planId: "free",
@@ -369,6 +413,7 @@ describe("SynchSettingTab", () => {
     const openBillingManagementPage = vi.fn();
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
       getSubscriptionStatus: () => ({
         state: "loaded",
         planId: "starter",
@@ -395,6 +440,7 @@ describe("SynchSettingTab", () => {
   it("shows canceling paid subscription period end", () => {
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
       getSubscriptionStatus: () => ({
         state: "loaded",
         planId: "starter",
@@ -420,6 +466,7 @@ describe("SynchSettingTab", () => {
     const retrySubscriptionStatusCheck = vi.fn(async () => {});
     const tab = createSettingsTab({
       hasAuthenticatedSession: () => true,
+      hasConnectedRemoteVault: () => true,
       getSubscriptionStatus: () => ({
         state: "failed",
         error: "offline",
@@ -617,7 +664,6 @@ describe("SynchSettingTab", () => {
     expect(names).toEqual(
       expect.arrayContaining([
         t("sync.label"),
-        t("authentication"),
         t("images"),
         t("sync.frequency"),
         t("diagnostics.header"),

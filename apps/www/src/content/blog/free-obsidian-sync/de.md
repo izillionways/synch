@@ -105,7 +105,7 @@ Synch ist ein Open-Source-Dienst mit Ende-zu-Ende-Verschlüsselung für Obsidian
 Synch hat einen kostenlosen Plan, mit dem Sie ein Obsidian-Vault ohne Zahlung synchronisieren können. Der aktuelle Free-Plan umfasst:
 
 - 1 synchronisiertes Vault
-- 50 MB Speicher
+- 30 MB Speicher
 - 3 MB maximale Dateigröße
 - 1 Tag Versionsverlauf
 

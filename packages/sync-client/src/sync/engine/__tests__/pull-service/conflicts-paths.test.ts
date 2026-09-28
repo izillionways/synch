@@ -1130,7 +1130,7 @@ describe("SyncPullService path conflicts", () => {
     await store.close();
   });
 
-  it("keeps pending local edits when remote path collisions are diverted", async () => {
+  it.each([undefined, "prefer-remote"] as const)("keeps pending edits for diverted path collisions with policy %s", async (policy) => {
     const store = createTestSyncStore();
     const adapter = createVaultAdapter({
       "Folder/shared.md": "local pending body",
@@ -1197,6 +1197,7 @@ describe("SyncPullService path conflicts", () => {
       getSyncToken: async () => createToken(),
       getSyncStore: () => store,
       getRemoteVaultKey: () => TEST_VAULT_KEY,
+      getConflictPolicy: policy === undefined ? undefined : () => policy,
       vaultAdapter: adapter,
       blobClient: client,
       onProgress: ignoreProgress,

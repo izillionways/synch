@@ -147,7 +147,7 @@ Synch passt besser, wenn:
 - Sie Versionsverlauf und Wiederherstellung gelöschter Dateien innerhalb der Planlimits wollen.
 - Sie eine kostenlose oder günstige Alternative zu Obsidian Sync wollen.
 
-Der aktuelle Synch-Free-Plan umfasst ein synchronisiertes Vault, 50 MB Speicher, eine maximale Dateigröße von 3 MB und 1 Tag Versionsverlauf. Der Starter-Plan umfasst ein synchronisiertes Vault, 1 GB Speicher, eine maximale Dateigröße von 5 MB und 1 Monat Versionsverlauf.
+Der aktuelle Synch-Free-Plan umfasst ein synchronisiertes Vault, 30 MB Speicher, eine maximale Dateigröße von 3 MB und 1 Tag Versionsverlauf. Der Starter-Plan umfasst ein synchronisiertes Vault, 1 GB Speicher, eine maximale Dateigröße von 5 MB und 1 Monat Versionsverlauf.
 
 Damit ist Synch eine praktische Option für kleine persönliche Vaults, Studierende, Hobby-Notizen und Nutzer, die private verschlüsselte Synchronisierung wollen, ohne ein größeres Abo zu bezahlen.
 

@@ -1,4 +1,8 @@
-import type { SyncFileRules, VaultConfigSyncRules } from "@synch/sync-client/core";
+import {
+  normalizeSyncConflictPolicy,
+  type SyncFileRules,
+  type VaultConfigSyncRules,
+} from "@synch/sync-client/core";
 import type {
   App,
   SettingDefinition,
@@ -25,7 +29,7 @@ import {
   populateSyncPausedSetting,
   populateSyncStatusSetting,
   populateVaultConnectSetting,
-  populateVaultConnectionSetting,
+  addVaultDisconnectButton,
   populateVaultManageSetting,
   type ApiBaseUrlSettingOptions,
 } from "./sections";
@@ -44,6 +48,7 @@ type BooleanKeys<T> = Extract<
 // their own modals, so array-valued rule keys are deliberately excluded.
 export type SynchSettingControlKey =
   | "syncIntervalMs"
+  | "conflictPolicy"
   | `fileRules.${BooleanKeys<SyncFileRules>}`
   | `vaultConfigSync.${BooleanKeys<VaultConfigSyncRules>}`;
 
@@ -167,8 +172,12 @@ export function buildSynchSettingDefinitions(
     const compatibilityMessage = serverCompatibility.message;
     definitions.push({
       name: t("sync.paused"),
+      aliases: hasConnectedRemoteVault ? [t("sync.disconnect"), t("vault.disconnect")] : [],
       render: (setting) => {
         populateSyncPausedSetting(setting, compatibilityMessage);
+        if (hasConnectedRemoteVault) {
+          addVaultDisconnectButton(setting, controller, requestRefresh);
+        }
       },
     });
   } else if (!hasConnectedRemoteVault) {
@@ -182,8 +191,9 @@ export function buildSynchSettingDefinitions(
   } else {
     definitions.push({
       name: t("sync.label"),
-      aliases: [t("sync.start"), t("sync.stop"), t("sync.now")],
+      aliases: [t("sync.start"), t("sync.stop"), t("sync.now"), t("sync.disconnect"), t("vault.disconnect")],
       render: (setting) => {
+        addVaultDisconnectButton(setting, controller, requestRefresh);
         host.setSyncRowControls(populateSyncStatusSetting(setting, controller));
       },
     });
@@ -197,19 +207,26 @@ export function buildSynchSettingDefinitions(
     });
   }
 
-  definitions.push({
-    name: t("authentication"),
-    render: (setting) => {
-      populateAuthenticationSetting(
-        setting,
-        controller,
-        isDeviceLoginInProgress,
-        requestRefresh,
-      );
-    },
-  });
+  // Onboarding follows the current connection state, including after disconnect.
+  if (!hasConnectedRemoteVault) {
+    definitions.push({
+      name: t("authentication"),
+      render: (setting) => {
+        populateAuthenticationSetting(
+          setting,
+          controller,
+          isDeviceLoginInProgress,
+          requestRefresh,
+        );
+      },
+    });
+    return definitions;
+  }
 
-  if (isOfficialCloud) {
+  void controller.ensureOrganizationRoleCheck();
+  const organizationRole = controller.getOrganizationRole();
+
+  if (isOfficialCloud && organizationRole === "owner") {
     definitions.push({
       name: t("subscription.label"),
       render: (setting) => {
@@ -219,22 +236,25 @@ export function buildSynchSettingDefinitions(
     });
   }
 
-  definitions.push({
-    name: t("vault.manage"),
-    desc: t("vault.manageDesc"),
-    render: (setting) => {
-      populateVaultManageSetting(setting, controller);
-    },
-  });
-
-  if (hasConnectedRemoteVault) {
+  // Older self-hosted servers lack organization discovery but still support
+  // vault management. Keep that capability separate from a verified role.
+  const legacyVaultManagement =
+    !isOfficialCloud && controller.isOrganizationRoleApiUnavailable();
+  if (organizationRole === "owner" || organizationRole === "admin" || legacyVaultManagement) {
     definitions.push({
-      name: t("vault.setting"),
-      aliases: [t("vault.disconnect")],
+      name: t("vault.manage"),
+      desc: t("vault.manageDesc"),
       render: (setting) => {
-        populateVaultConnectionSetting(setting, controller, requestRefresh);
+        // Admins still need the plan status to show the sharing action.
+        if (isOfficialCloud && organizationRole === "admin") {
+          void controller.ensureSubscriptionStatusCheck();
+        }
+        populateVaultManageSetting(setting, controller);
       },
     });
+  }
+
+  if (hasConnectedRemoteVault) {
     definitions.push({
       name: t("deleted.header"),
       aliases: [t("vault.viewDeletedFiles")],
@@ -260,6 +280,18 @@ export function buildSynchSettingDefinitions(
         options: syncFrequencyOptions(),
       },
     });
+    definitions.push({
+      name: t("sync.conflictPolicy"),
+      desc: t("sync.conflictPolicyDesc"),
+      control: {
+        type: "dropdown",
+        key: "conflictPolicy",
+        options: {
+          "conflict-copy": t("sync.conflictPolicyCopy"),
+          "prefer-remote": t("sync.conflictPolicyRemote"),
+        },
+      },
+    });
   }
 
   definitions.push({
@@ -278,6 +310,10 @@ export function getSynchSettingControlValue(
   controller: SynchSettingsController,
   key: string,
 ): unknown {
+  if (key === "conflictPolicy") {
+    return controller.getConflictPolicy();
+  }
+
   if (key === "syncIntervalMs") {
     return String(controller.getSyncIntervalMs());
   }
@@ -302,6 +338,11 @@ export async function setSynchSettingControlValue(
   key: string,
   value: unknown,
 ): Promise<void> {
+  if (key === "conflictPolicy") {
+    await controller.setConflictPolicy(normalizeSyncConflictPolicy(value));
+    return;
+  }
+
   if (key === "syncIntervalMs") {
     await controller.setSyncIntervalMs(Number(value));
     return;

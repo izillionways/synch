@@ -1,3 +1,4 @@
+import type { SyncConflictPolicy } from "../core/conflict-policy";
 import { decryptSyncMetadata } from "../core/crypto";
 import type { ContentReservation, SyncContentRuntimeDeps } from "../core/content-runtime";
 import type { SyncTokenResponse } from "../remote/client";
@@ -41,6 +42,7 @@ import {
 
 export interface PullEntryStateApplierDeps extends SyncContentRuntimeDeps {
   getRemoteVaultKey: () => Uint8Array;
+  getConflictPolicy?: () => SyncConflictPolicy;
   vaultAdapter: PullEntryStateVaultAdapter;
   eventGate?: SyncEventGateLike;
   blobClient: Pick<SyncBlobClient, "downloadBlob">;

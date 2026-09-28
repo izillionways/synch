@@ -230,7 +230,7 @@ Git 是歷史與傳輸工具。Synch 是為 Obsidian 做的開源端對端加密
 - 想要 Obsidian Sync 的免費或低成本替代
 - 想比 Git + 外掛 + 遠端託管更簡單
 
-目前 Synch Free 方案包含 1 個同步 vault、50 MB 儲存空間、3 MB 最大檔案大小，以及 1 天版本歷史。Starter 方案包含 1 個同步 vault、1 GB 儲存空間、5 MB 最大檔案大小，以及 1 個月版本歷史。
+目前 Synch Free 方案包含 1 個同步 vault、30 MB 儲存空間、3 MB 最大檔案大小，以及 1 天版本歷史。Starter 方案包含 1 個同步 vault、1 GB 儲存空間、5 MB 最大檔案大小，以及 1 個月版本歷史。
 
 對小型個人 vault、學生和嗜好筆記，以及不想先學開發者工具就想要私密加密同步的人來說，Synch 很實用。
 

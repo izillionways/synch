@@ -1,5 +1,9 @@
 import type { UserVisibleSyncProgress } from "@synch/sync-client/engine";
-import type { SyncFileRules, VaultConfigSyncRules } from "@synch/sync-client/core";
+import type {
+  SyncConflictPolicy,
+  SyncFileRules,
+  VaultConfigSyncRules,
+} from "@synch/sync-client/core";
 import type { AuthReadiness } from "@synch/sync-client/auth";
 import type {
   SynchDeletedFileCursor,
@@ -24,6 +28,9 @@ export interface SynchSettingsController {
   ensureCommunityPluginUpdateCheck(): Promise<void>;
   retryCommunityPluginUpdateCheck(): Promise<void>;
   getServerCompatibilityStatus(): SynchServerCompatibilityStatus;
+  getOrganizationRole(): string | null;
+  isOrganizationRoleApiUnavailable(): boolean;
+  ensureOrganizationRoleCheck(): Promise<void>;
   getSubscriptionStatus(): SynchSubscriptionStatus;
   ensureSubscriptionStatusCheck(): Promise<void>;
   retrySubscriptionStatusCheck(): Promise<void>;
@@ -42,6 +49,8 @@ export interface SynchSettingsController {
   listFileSizeBlockedFiles(): Promise<SynchFileSizeBlockedFile[]>;
   isSyncEnabled(): boolean;
   setSyncEnabled(enabled: boolean): Promise<void>;
+  getConflictPolicy(): SyncConflictPolicy;
+  setConflictPolicy(value: SyncConflictPolicy): Promise<void>;
   getSyncIntervalMs(): number;
   setSyncIntervalMs(value: number): Promise<void>;
   syncNow(): Promise<void>;
@@ -60,6 +69,7 @@ export interface SynchSettingsController {
   createRemoteVaultFromPrompt(): Promise<void>;
   connectRemoteVaultFromPrompt(): Promise<void>;
   openRemoteVaultManagementPage(): void;
+  openVaultSharing(): Promise<void>;
   disconnectRemoteVault(): Promise<void>;
   updateApiBaseUrl(value: string): Promise<void>;
   getSyncFileRules(): SyncFileRules;

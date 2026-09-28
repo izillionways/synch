@@ -7,6 +7,18 @@ import { normalizeSynchPluginSettings } from "./schema";
 describe("normalizeSynchPluginSettings", () => {
   const defaultApiBaseUrl = "https://api.synch.test";
 
+  it.each([undefined, null, "invalid", true, {}, "conflict-copy"])(
+    "defaults missing or invalid conflict policies to preserving copies: %j",
+    (conflictPolicy) => {
+      expect(normalizeSynchPluginSettings({ conflictPolicy }).conflictPolicy).toBe("conflict-copy");
+    },
+  );
+
+  it("restores the explicit remote conflict policy", () => {
+    expect(normalizeSynchPluginSettings({ conflictPolicy: "prefer-remote" }).conflictPolicy).toBe("prefer-remote");
+    expect(normalizeSynchPluginSettings(null).conflictPolicy).toBe("conflict-copy");
+  });
+
   it("defaults the API base URL when existing settings do not include it", () => {
     const settings = normalizeSynchPluginSettings(
       {
