@@ -3,7 +3,7 @@
 Fork：<https://github.com/izillionways/synch>。镜像：`zillionways/synch`。构建文件：`.github/workflows/dockerhub.yml`。
 
 - 每小时第 23 分钟（UTC）查询 `hjinco/synch` 的最新正式版 Release，跳过草稿和预发布版。
-- 检测到新版本后，使用 GitHub 官方同步接口合并上游 `main` 到 fork，保留 fork 的自动化文件；冲突会使任务失败，不会强制覆盖。
+- 检测到新版本后，使用 Git 合并上游 `main` 到 fork，并通过仓库专用 SSH Deploy Key 推送，保留 fork 的自动化文件；冲突会使任务失败，不会强制覆盖。
 - 每次检查都会同步最新正式版的 Git Tag，并核对它与镜像使用的源码提交一致。标签冲突时停止，不强制覆盖；GitHub Release 页面及其插件附件不会复制到 fork。
 - 镜像始终从该 Release 标签对应的准确提交构建。即使 `main` 有尚未发布的提交，也不会混入版本镜像。
 - 复用上游 `apps/api/Dockerfile`，构建 `linux/amd64` 和 `linux/arm64`，发布 `版本号` 和 `latest` 标签。
@@ -18,9 +18,12 @@ Fork：<https://github.com/izillionways/synch>。镜像：`zillionways/synch`。
 | --- | --- | --- |
 | Variable | `DOCKERHUB_USERNAME` | `zillionways`（已配置） |
 | Secret | `DOCKERHUB_TOKEN` | Docker Hub Personal Access Token，具备目标仓库的读写权限 |
+| Secret | `UPSTREAM_SYNC_SSH_KEY` | 仅用于本仓库的 SSH Deploy Key 私钥；对应公钥须在本仓库 **Settings → Deploy keys** 中添加并勾选 **Allow write access** |
 | Variable（可选） | `DOCKERHUB_IMAGE` | 完整镜像名，例如 `组织名/synch`；默认 `DOCKERHUB_USERNAME/synch` |
 
 在 Docker Hub 中准备对应的镜像仓库。Token 只放在 GitHub Secret 中。
+
+同步密钥须单独生成，不要复用个人 SSH 私钥。私钥只存入 `UPSTREAM_SYNC_SSH_KEY`，不要提交到仓库。撤销时删除仓库 Deploy Key 和对应 Secret；密钥本身没有自动到期时间。
 
 在 **Actions → Sync upstream and publish Docker Hub** 中启用工作流，再点击 **Run workflow**：
 
@@ -30,7 +33,7 @@ Fork：<https://github.com/izillionways/synch>。镜像：`zillionways/synch`。
 
 之后由 GitHub Actions 定时运行，不依赖本机或 Codex 保持开启。GitHub 调度可能延迟，不保证整点准时。可在 Actions 页面查看失败记录。
 
-同步和记录版本使用工作流自带的 `GITHUB_TOKEN`（`contents: write`），无须额外的 GitHub 个人 Token。上游同步与构建在同一次工作流中完成，不依赖机器人提交触发另一条工作流。
+上游同步和标签推送使用仓库专用 Deploy Key，因为默认 `GITHUB_TOKEN` 无权更新 `.github/workflows/` 文件，遇到上游工作流变更会返回 HTTP 422。GitHub API 查询和发布记录仍使用默认 `GITHUB_TOKEN`，发布记录任务单独授予 `contents: write`。同步密钥仅交给同步任务，镜像构建任务不接收它。上游同步与构建在同一次工作流中完成，合并提交带有 `[skip ci]`，避免触发上游附带的 push 工作流。参考 [GitHub Deploy Key 文档](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)。
 
 ## 使用发布的镜像
 

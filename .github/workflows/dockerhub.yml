@@ -25,8 +25,6 @@ jobs:
   check:
     if: github.repository == 'izillionways/synch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
       changed: ${{ steps.release.outputs.changed }}
       tag: ${{ steps.release.outputs.tag }}
@@ -40,6 +38,8 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # GITHUB_TOKEN cannot push changes to upstream workflow files.
+          ssh-key: ${{ secrets.UPSTREAM_SYNC_SSH_KEY }}
 
       - name: Test release detection
         run: node .github/scripts/dockerhub-release.mjs --test
@@ -65,7 +65,12 @@ jobs:
 
       - name: Sync fork with upstream
         if: steps.release.outputs.changed == 'true'
-        run: gh api "repos/$GITHUB_REPOSITORY/merge-upstream" --method POST -f branch=main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --no-tags https://github.com/hjinco/synch.git main
+          git merge --no-edit -m 'chore: sync upstream main [skip ci]' FETCH_HEAD
+          git push origin HEAD:main
 
       - name: Sync upstream release tag
         env:
