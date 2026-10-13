@@ -1,8 +1,9 @@
 ---
-import { getLocale, localizedPath, ui, type Locale, locales } from "../i18n";
+import { getLocale, localizedPath, unlocalizedPath, ui, type Locale, locales } from "../i18n";
 
 interface Props {
   locale?: Locale;
+  languageSwitchPath?: string;
 }
 
 const localeLabels: Record<Locale, string> = {
@@ -16,9 +17,7 @@ const localeLabels: Record<Locale, string> = {
 
 const locale = Astro.props.locale ?? getLocale(Astro.currentLocale);
 const t = ui[locale].nav;
-const routePath = Astro.url.pathname
-  .replace(new RegExp(`^/${locale}(/|$)`), "")
-  .replace(/^\//, "");
+const routePath = Astro.props.languageSwitchPath ?? unlocalizedPath(Astro.url.pathname);
 ---
 
 <footer class="py-8 text-xs text-zinc-600 flex flex-col sm:flex-row items-center justify-between gap-4">

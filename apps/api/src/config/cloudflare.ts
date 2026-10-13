@@ -23,6 +23,10 @@ export type CloudflareRuntimeEnv = Omit<
 	| "ADMIN_TOKEN"
 > & {
 	AUTH_ALLOWED_EMAILS?: string;
+	GOOGLE_CLIENT_ID?: string;
+	GOOGLE_CLIENT_SECRET?: string;
+	GITHUB_CLIENT_ID?: string;
+	GITHUB_CLIENT_SECRET?: string;
 	EMAIL?: SendEmail;
 	AUTH_EMAIL_FROM?: string;
 	DEV_MODE?: boolean | string;

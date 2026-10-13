@@ -1,3 +1,4 @@
+import { withSyncState } from "./sync-state-coordinator";
 import { preparePushBatches } from "./push-preparation-pipeline";
 import { SyncWorkProgress } from "./work-progress";
 import type { SyncOperationProgress } from "../runtime/user-visible-status";
@@ -74,6 +75,13 @@ export interface SyncPushStore
     >,
     PushMutationStore {}
 
+export type StalePushMutation = Pick<PendingMutationRow, "entryId" | "baseRevision">;
+
+export interface PushPendingMutationsOptions {
+  /** Drain these entries before admitting the rest of the pending queue. */
+  priorityEntryIds?: readonly string[];
+}
+
 export interface PushPendingMutationsResult {
   cursor: number;
   mutationsPushed: number;
@@ -83,6 +91,7 @@ export interface PushPendingMutationsResult {
   conflictsCreated: number;
   shouldPullAfterPush: boolean;
   hasMore: boolean;
+  staleMutations?: StalePushMutation[];
   stopReason?: "storage_quota_exceeded";
 }
 
@@ -100,6 +109,7 @@ export class SyncPushService {
     session: SyncRealtimeSession,
     onProgress = this.deps.onProgress ?? (async (_progress: SyncOperationProgress) => {}),
     shouldYield: () => boolean = () => false,
+    options: PushPendingMutationsOptions = {},
   ): Promise<PushPendingMutationsResult> {
     const store = this.deps.getSyncStore();
     if (!store) {
@@ -120,6 +130,7 @@ export class SyncPushService {
     let blockedSyncFiles = 0;
     let shouldPullAfterPush = false;
     const acceptedCursors: number[] = [];
+    const staleMutations: StalePushMutation[] = [];
     // Allow one immediate retry after requeueing; repeated churn must use the
     // auto loop's retry backoff instead of keeping an unbounded drain alive.
     const requeuedEntries = new Set<string>();
@@ -146,6 +157,7 @@ export class SyncPushService {
         session,
         progress,
         () => shouldYield() || shouldPullAfterPush || requeueLimitReached,
+        options,
       )) {
         const committable: Array<{
           mutation: (typeof preparedMutations)[number]["mutation"];
@@ -261,9 +273,14 @@ export class SyncPushService {
         }
 
         try {
-          await store.applyAcceptedPushBatch(acceptedPushMutations, {
-            remoteVaultKey,
-          });
+          if (acceptedPushMutations.length > 0) {
+            await withSyncState(store, {
+              entryIds: acceptedPushMutations.map((item) => item.mutation.entryId),
+              paths: acceptedPushMutations.map((item) => item.metadata.path),
+            }, async () => await store.applyAcceptedPushBatch(acceptedPushMutations, {
+              remoteVaultKey,
+            }));
+          }
         } catch (error) {
           for (const accepted of acceptedFiles) {
             this.deps.onFileSyncFailed?.({
@@ -306,6 +323,7 @@ export class SyncPushService {
           shouldPullAfterPush = shouldPullAfterPush || result.shouldPullAfterPush;
 
           if (result.status === "stale") {
+            staleMutations.push({ entryId: mutation.entryId, baseRevision: mutation.baseRevision });
             this.deps.onFileSyncFailed?.({
               operation: mutation.op,
               path,
@@ -367,6 +385,7 @@ export class SyncPushService {
       conflictsCreated,
       shouldPullAfterPush,
       hasMore,
+      ...(staleMutations.length > 0 ? { staleMutations } : {}),
       ...(stopReason ? { stopReason } : {}),
     };
   }
@@ -384,14 +403,18 @@ export class SyncPushService {
         continue;
       }
 
-      await store.updateDirtyEntry({
-        ...mutation,
-        status: "pending",
-        blockedReason: null,
-        blockedEncryptedSizeBytes: null,
-        blockedMaxFileSizeBytes: null,
+      await withSyncState(store, { entryIds: [mutation.entryId] }, async () => {
+        const current = await store.getDirtyEntryMutation(mutation.entryId);
+        if (current?.mutationId !== mutation.mutationId || current.baseRevision !== mutation.baseRevision) return;
+        await store.updateDirtyEntry({
+          ...mutation,
+          status: "pending",
+          blockedReason: null,
+          blockedEncryptedSizeBytes: null,
+          blockedMaxFileSizeBytes: null,
+        });
+        unblocked += 1;
       });
-      unblocked += 1;
     }
 
     return unblocked;
@@ -422,6 +445,7 @@ export class SyncPushService {
     session: SyncRealtimeSession,
     progress: SyncWorkProgress,
     shouldYield: () => boolean,
+    options: PushPendingMutationsOptions,
   ): AsyncGenerator<
     Array<{
       mutation: PendingMutationRow;
@@ -430,7 +454,22 @@ export class SyncPushService {
     }>
   > {
     return preparePushBatches(
-      (limit, excluded) => store.listDirtyEntries(limit, excluded),
+      async (limit, excluded) => {
+        if (options.priorityEntryIds?.length) {
+          const priority: PendingMutationRow[] = [];
+          for (const entryId of new Set(options.priorityEntryIds)) {
+            const mutation = await store.getDirtyEntryMutation(entryId);
+            if (mutation && mutation.status !== "blocked") priority.push(mutation);
+          }
+          if (priority.length > 0) {
+            // Return an empty supply while priority entries are in flight;
+            // otherwise a faster stale entry could stop the batch before its
+            // path owner commits. The pipeline reloads after every commit.
+            return priority.filter((mutation) => !excluded.has(mutation.entryId)).slice(0, limit);
+          }
+        }
+        return await store.listDirtyEntries(limit, excluded);
+      },
       this.deps.prepareConcurrency ?? DEFAULT_PUSH_PREPARE_CONCURRENCY,
       async (mutation) => {
         progress.register([mutation.mutationId]);

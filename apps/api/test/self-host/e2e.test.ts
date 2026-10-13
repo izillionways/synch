@@ -475,7 +475,7 @@ describe("self-hosted Node runtime: end-to-end sync", () => {
 		cleanup.push(() => closeServer(server, wss));
 
 		const publicFiles = listPublicFiles(path.join(API_ROOT, "public"));
-		expect(publicFiles).toEqual(expect.arrayContaining(["styles.css", "favicon.ico"]));
+		expect(publicFiles).toEqual(expect.arrayContaining(["favicon.ico"]));
 
 		for (const file of publicFiles) {
 			const urlPath = `/${file}`;
@@ -495,7 +495,7 @@ describe("self-hosted Node runtime: end-to-end sync", () => {
 			}
 		}
 
-		for (const page of ["/device", "/signin", "/signup", "/vaults"]) {
+		for (const page of ["/device", "/signin", "/signup", "/vaults", "/organizations", "/invitations"]) {
 			const response = await fetch(`${baseUrl}${page}`);
 			expect(response.status, page).toBe(200);
 			expect(response.headers.get("content-type"), page).toMatch(/^text\/html/);

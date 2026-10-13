@@ -1,4 +1,5 @@
 import { serveStatic } from "@hono/node-server/serve-static";
+import type { Context, Env } from "hono";
 import { createClient } from "@libsql/client";
 import { drizzle as drizzleLibsql } from "drizzle-orm/libsql";
 import { migrate as migrateLibsql } from "drizzle-orm/libsql/migrator";
@@ -36,6 +37,10 @@ export interface NodeRuntimeConfig {
 	corsOrigin?: string;
 	betterAuthSecret: string;
 	authAllowedEmails: string;
+	googleClientId?: string;
+	googleClientSecret?: string;
+	githubClientId?: string;
+	githubClientSecret?: string;
 	syncTokenSecret: string;
 	syncTokenTtlSeconds?: number;
 	blobStorage: BlobObjectStorage;
@@ -92,6 +97,10 @@ export async function createNodeRuntime(config: NodeRuntimeConfig) {
 				devMode: false,
 				secret: config.betterAuthSecret,
 				allowedEmails: config.authAllowedEmails,
+				googleClientId: config.googleClientId,
+				googleClientSecret: config.googleClientSecret,
+				githubClientId: config.githubClientId,
+				githubClientSecret: config.githubClientSecret,
 			},
 			syncTokenSecret: config.syncTokenSecret,
 			syncTokenTtlSeconds: config.syncTokenTtlSeconds,
@@ -99,13 +108,13 @@ export async function createNodeRuntime(config: NodeRuntimeConfig) {
 		},
 	);
 
-	const servePublicAsset = serveStatic({
+	const servePublicAsset = serveStatic<Env>({
 		root: PUBLIC_DIR,
 		rewriteRequestPath: rewritePublicAssetPath,
 	});
 	// Fallback only: `GET *` would also match API routes and run if a handler
 	// called `next()`. `notFound` runs only when no route matched.
-	application.app.notFound(async (c) => {
+	application.app.notFound(async (c: Context<Env, string>) => {
 		if (c.req.method === "GET" || c.req.method === "HEAD") {
 			const asset = await servePublicAsset(c, async () => {});
 			if (asset) {

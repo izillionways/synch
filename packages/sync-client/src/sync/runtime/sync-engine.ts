@@ -9,7 +9,7 @@ import type {
   SyncDiagnostics,
   SyncFailurePhase,
 } from "../diagnostics/types";
-import { SyncAutoLoop } from "../engine/auto-sync";
+import { SyncAutoLoop, type SyncTerminalStopReason } from "../engine/auto-sync";
 import type { SyncTokenResponse } from "../remote/client";
 import { SyncEventGate } from "../engine/event-gate";
 import { SyncEventRecorder } from "../engine/event-recorder";
@@ -68,7 +68,6 @@ import {
   listBlockedSyncFiles,
   listFileSizeBlockedFiles,
   type SyncBlockedSyncFile,
-  type SyncFileSizeBlockedFile,
 } from "../engine/file-size-blocked";
 import {
   SyncActivityTracker,
@@ -99,6 +98,7 @@ export interface SyncEngineDeps {
   hasActiveRemoteVaultSession: () => boolean;
   diagnostics: SyncDiagnostics;
   onSyncError: (error: unknown, phase: SyncFailurePhase) => void | Promise<void>;
+  onSyncTerminalStop?: (reason: SyncTerminalStopReason) => void;
   notifySyncConflict: (event: {
     op: "upsert" | "delete";
     reason?: "local_pending_mutation" | "remote_path_collision";
@@ -234,9 +234,9 @@ export class SyncEngine {
             ? this.deps.createWebSocket(url, protocols)
             : new WebSocket(url, protocols),
       }),
-      pushPendingMutations: async (session, shouldYield) =>
+      pushPendingMutations: async (session, shouldYield, options) =>
         await this.withSyncActivity("push", async (report) => {
-          return await this.syncPushService.pushPendingMutations(session, report, shouldYield);
+          return await this.syncPushService.pushPendingMutations(session, report, shouldYield, options);
         }),
       unblockFileSizeBlockedMutations: async (session) =>
         await this.withSyncActivity("local", async () => {
@@ -251,6 +251,10 @@ export class SyncEngine {
       pullOnce: async (session) =>
         await this.withSyncActivity("pull", async (report) => {
           return await this.syncPullService.pullOnce(session, report);
+        }),
+      recoverEntryStates: async (session, entryIds) =>
+        await this.withSyncActivity("pull", async (report) => {
+          await this.syncPullService.recoverEntryStates(session, entryIds, report);
         }),
       shouldDeferSyncWork: () => this.deps.shouldDeferSyncWork(),
       onConnectionStateChange: (state) => {
@@ -301,6 +305,10 @@ export class SyncEngine {
       },
       onError: (error) => {
         void this.deps.onSyncError(error, "auto_sync");
+      },
+      onTerminalStop: (reason) => {
+        this.stopHiddenFolderReconcileTimer();
+        this.deps.onSyncTerminalStop?.(reason);
       },
       onRetryScheduled: ({ attempt, delayMs }) => {
         this.deps.diagnostics.record({
@@ -576,6 +584,7 @@ export class SyncEngine {
 
   private startHiddenFolderReconcileTimer(): void {
     if (
+      !this.syncAutoLoop.isActive() ||
       this.hiddenFolderReconcileTimer !== null ||
       !this.hasPolledReconcileSources()
     ) {
@@ -658,7 +667,7 @@ export class SyncEngine {
   }
 
   /** @deprecated Use `listBlockedSyncFiles`. */
-  async listFileSizeBlockedFiles(): Promise<SyncFileSizeBlockedFile[]> {
+  async listFileSizeBlockedFiles(): Promise<SyncBlockedSyncFile[]> {
     const store = this.syncStore;
     if (!store) {
       return [];

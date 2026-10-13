@@ -52,3 +52,57 @@ it("uses the selected vault's organization and ignores a previous organization's
     planId: "plus",
   });
 });
+
+function fixture() {
+  const context = { token: "token", authenticated: true };
+  const refreshUi = vi.fn();
+  const service = new SynchSubscriptionService({
+    getApiBaseUrl: () => "https://api.synch.run",
+    hasAuthenticatedSession: () => context.authenticated,
+    getAuthSessionToken: () => context.token,
+    refreshUi,
+  });
+  return { context, service, refreshUi };
+}
+
+const billingResponse = {
+  status: 200,
+  json: {
+    planId: "plus", billingInterval: "monthly", active: true,
+    status: "active", cancelAtPeriodEnd: false, periodEnd: null,
+  },
+};
+
+it.each(["account-change", "sign-out", "clear"])("discards pending billing results after %s without a UI read", async (action) => {
+  let finish!: (value: unknown) => void;
+  setRequestUrlMock(vi.fn(() => new Promise((resolve) => { finish = resolve; })));
+  const { context, service, refreshUi } = fixture();
+  const pending = service.ensureSubscriptionStatusCheck();
+  if (action === "account-change") context.token = "new-token";
+  else if (action === "sign-out") context.authenticated = false;
+  else service.clearSubscriptionStatus();
+  finish(billingResponse);
+  await pending;
+  expect(refreshUi).not.toHaveBeenCalled();
+  expect(service.getSubscriptionStatus()).toEqual({ state: "idle" });
+});
+
+it("deduplicates checks, caches failures, and allows a manual retry", async () => {
+  let fail!: (error: unknown) => void;
+  const request = vi.fn(() => new Promise<unknown>((_resolve, reject) => { fail = reject; }));
+  setRequestUrlMock(request);
+  const { service } = fixture();
+  const pending = service.ensureSubscriptionStatusCheck();
+  const retry = service.retrySubscriptionStatusCheck();
+  expect(service.getSubscriptionStatus()).toEqual({ state: "checking" });
+  expect(request).toHaveBeenCalledTimes(1);
+  fail(new Error("offline"));
+  await Promise.all([pending, retry]);
+  expect(service.getSubscriptionStatus()).toMatchObject({ state: "failed" });
+  await service.ensureSubscriptionStatusCheck();
+  expect(request).toHaveBeenCalledTimes(1);
+  request.mockImplementation(async () => billingResponse);
+  await service.retrySubscriptionStatusCheck();
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(service.getSubscriptionStatus()).toMatchObject({ state: "loaded", planId: "plus" });
+});

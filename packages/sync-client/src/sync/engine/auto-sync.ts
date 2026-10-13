@@ -1,3 +1,4 @@
+import { isSyncPausedError, isSyncPausedClose } from "../remote/sync-pause";
 import type { SyncTokenResponse } from "../remote/client";
 import type { PresenceSelection } from "../core/presence";
 import {
@@ -5,7 +6,8 @@ import {
   remoteVaultUnavailableFromWebSocketClose,
   type RemoteVaultUnavailableError,
 } from "../../remote-vault/unavailable";
-import type { PushPendingMutationsResult } from "./push-service";
+import type { PushPendingMutationsOptions, PushPendingMutationsResult, StalePushMutation } from "./push-service";
+import { RecoveryPendingDependenciesError } from "./pull-recovery-manifest";
 import {
   SyncRealtimeClient,
   SyncRealtimeConnectionError,
@@ -32,11 +34,13 @@ export interface SyncAutoLoopDeps {
   pushPendingMutations: (
     session: SyncRealtimeSession,
     shouldYield: () => boolean,
+    options?: PushPendingMutationsOptions,
   ) => Promise<PushPendingMutationsResult>;
   unblockFileSizeBlockedMutations?: (
     session: SyncRealtimeSession,
   ) => Promise<number>;
   pullOnce: (session: SyncRealtimeSession) => Promise<unknown>;
+  recoverEntryStates?: (session: SyncRealtimeSession, entryIds: string[]) => Promise<void>;
   realtimeClient: SyncRealtimeClientLike;
   pushDebounceMs?: number;
   reconnectDelayMs?: number;
@@ -55,9 +59,16 @@ export interface SyncAutoLoopDeps {
   onIdle?: () => void;
   onRetryScheduled?: (input: { attempt: number; delayMs: number }) => void;
   onError?: (error: unknown) => void;
+  onTerminalStop?: (reason: SyncTerminalStopReason) => void;
   onRemoteVaultUnavailable?: (error: RemoteVaultUnavailableError) => void | Promise<void>;
   onStorageQuotaExceeded?: () => void | Promise<void>;
 }
+
+export type SyncTerminalStopReason =
+  | { type: "sync_paused"; error: Error }
+  | { type: "remote_vault_unavailable"; error: RemoteVaultUnavailableError }
+  | { type: "sync_history_mismatch"; error: Error }
+  | { type: "storage_quota_exceeded" };
 
 export interface SyncRealtimeClientLike {
   openSession: SyncRealtimeClient["openSession"];
@@ -71,6 +82,7 @@ export class SyncAutoLoop {
   private readonly timers = new AutoSyncTimers();
   private reconnectAttempt = 0;
   private syncRetryAttempt = 0;
+  private pushPriorityEntryIds: string[] = [];
   private readonly state: SyncAutoLoopState;
   private storageStatusWatching = false;
   private presenceWatching = false;
@@ -98,6 +110,7 @@ export class SyncAutoLoop {
   stop(): void {
     this.state.set("stopped");
     this.pendingWork.clear();
+    this.pushPriorityEntryIds = [];
     this.timers.clearAll();
     this.presenceWatchSent = false;
     this.setPresenceAvailability(false);
@@ -192,6 +205,11 @@ export class SyncAutoLoop {
     const token = await this.deps.getSyncToken();
     const cursor = await store.getCursor();
     let sessionError: Error | null = null;
+    const throwIfSessionFailed = () => {
+      if (sessionError) {
+        throw sessionError;
+      }
+    };
     const session = await this.realtimeClient.openSession(
       this.deps.getApiBaseUrl(),
       token,
@@ -217,13 +235,9 @@ export class SyncAutoLoop {
           "This device's sync history no longer matches the remote vault. Move .synch/sync.sqlite aside, then run `synch vault connect --vault-id <id>` to rebuild this read-only replica's sync state.",
         );
       }
-      if (sessionError) {
-        throw sessionError;
-      }
+      throwIfSessionFailed();
       await this.deps.pullOnce(session);
-      if (sessionError) {
-        throw sessionError;
-      }
+      throwIfSessionFailed();
     } finally {
       session.close();
     }
@@ -401,6 +415,10 @@ export class SyncAutoLoop {
             this.setPresenceAvailability(enabled);
           },
           onClose: (event) => {
+            if (isSyncPausedClose(event)) {
+              this.handleError(new SyncRealtimeError("sync_paused", "vault sync is temporarily paused for repair"));
+              return;
+            }
             const unavailable = remoteVaultUnavailableFromWebSocketClose(
               event,
               token.vaultId,
@@ -472,6 +490,7 @@ export class SyncAutoLoop {
       if (isCursorAheadOfServerError(error)) {
         this.stop();
         this.handleError(error);
+        this.deps.onTerminalStop?.({ type: "sync_history_mismatch", error });
         return;
       }
 
@@ -609,7 +628,10 @@ export class SyncAutoLoop {
   }
 
   private async drain(force = false): Promise<void> {
-    if (!this.isActive() || (!force && this.shouldDeferSyncWork())) {
+    if (
+      !this.isActive() ||
+      (!force && (this.shouldDeferSyncWork() || this.timers.has("syncRetry")))
+    ) {
       return await (this.drainPromise ?? Promise.resolve());
     }
     if (this.drainPromise) {
@@ -669,6 +691,7 @@ export class SyncAutoLoop {
 
       let shouldPullNow = shouldPull;
       let pushCompleted = !shouldPush;
+      let staleMutations: StalePushMutation[] = [];
       try {
         let session: SyncRealtimeSession | null = null;
         if (shouldPush || shouldPullNow) {
@@ -699,15 +722,20 @@ export class SyncAutoLoop {
           if (!session) {
             throw new Error("Sync realtime session is not connected.");
           }
-          const pushResult = await this.deps.pushPendingMutations(session, () =>
-            !this.isActive() || this.pendingWork.pullTargetCursor !== null,
+          const pushResult = await this.deps.pushPendingMutations(
+            session,
+            () => !this.isActive() || this.pendingWork.pullTargetCursor !== null,
+            { priorityEntryIds: this.pushPriorityEntryIds },
           );
           pushCompleted = true;
+          if (!pushResult.hasMore) this.pushPriorityEntryIds = [];
+          staleMutations = pushResult.staleMutations ?? [];
           if (pushResult.stopReason === "storage_quota_exceeded") {
             try {
               await this.deps.onStorageQuotaExceeded?.();
             } finally {
               this.stop();
+              this.deps.onTerminalStop?.({ type: "storage_quota_exceeded" });
             }
             return;
           }
@@ -721,12 +749,33 @@ export class SyncAutoLoop {
             throw new Error("Sync realtime session is not connected.");
           }
           await this.deps.pullOnce(session);
+          shouldPullNow = false;
+        }
+        if (session && staleMutations.length > 0) {
+          let unresolved = await this.unresolvedStaleEntries(staleMutations);
+          if (unresolved.length > 0 && this.deps.recoverEntryStates) {
+            await this.deps.recoverEntryStates(session, unresolved);
+            unresolved = await this.unresolvedStaleEntries(staleMutations);
+          }
+          if (unresolved.length > 0) {
+            // An empty delta is not progress. Keep the pending mutations and
+            // back off even if unrelated entries were committed successfully.
+            throw new SyncRealtimeError(
+              "stale_revision",
+              "Sync could not reconcile an outdated file revision. Local changes are preserved; retrying with backoff.",
+            );
+          }
         }
         this.resetSyncRetry();
       } catch (error) {
+        if (error instanceof RecoveryPendingDependenciesError) {
+          this.pushPriorityEntryIds = error.entryIds;
+          this.requestPush();
+        }
         if (isCursorAheadOfServerError(error)) {
           this.stop();
           this.handleError(error);
+          this.deps.onTerminalStop?.({ type: "sync_history_mismatch", error });
           return;
         }
 
@@ -748,6 +797,21 @@ export class SyncAutoLoop {
         return;
       }
     }
+  }
+
+  private async unresolvedStaleEntries(
+    mutations: StalePushMutation[],
+  ): Promise<string[]> {
+    const store = this.deps.getSyncStore();
+    if (!store) throw new Error("Sync store is not initialized.");
+    const unresolved: string[] = [];
+    for (const mutation of mutations) {
+      const pending = await store.getDirtyEntryMutation(mutation.entryId);
+      if (pending && pending.baseRevision <= mutation.baseRevision) {
+        unresolved.push(mutation.entryId);
+      }
+    }
+    return unresolved;
   }
 
   private scheduleSyncRetry(): void {
@@ -785,7 +849,7 @@ export class SyncAutoLoop {
     this.timers.clear("syncRetry");
   }
 
-  private isActive(): boolean {
+  isActive(): boolean {
     return this.state.isActive();
   }
 
@@ -818,11 +882,20 @@ export class SyncAutoLoop {
   }
 
   private handleError(error: unknown): void {
+    if (isSyncPausedError(error)) {
+      // The same pause can arrive through a session error, pending requests and close.
+      if (!this.isActive()) return;
+      this.stop();
+      this.deps.onError?.(error);
+      this.deps.onTerminalStop?.({ type: "sync_paused", error });
+      return;
+    }
     this.deps.onError?.(error);
   }
 
   private handleRemoteVaultUnavailable(error: RemoteVaultUnavailableError): void {
     this.stop();
+    this.deps.onTerminalStop?.({ type: "remote_vault_unavailable", error });
     void this.deps.onRemoteVaultUnavailable?.(error);
   }
 }
@@ -831,7 +904,7 @@ function isRealtimeConnectionError(error: unknown): boolean {
   return error instanceof SyncRealtimeConnectionError;
 }
 
-function isCursorAheadOfServerError(error: unknown): boolean {
+function isCursorAheadOfServerError(error: unknown): error is SyncRealtimeError {
   return (
     error instanceof SyncRealtimeError && error.code === "cursor_ahead_of_server"
   );

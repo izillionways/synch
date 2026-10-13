@@ -5,11 +5,13 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 
 import tailwindcss from '@tailwindcss/vite';
+import { pageRedirects } from './src/lib/canonical-url.ts';
 
 // https://astro.build/config
 export default defineConfig({
   site: "https://synch.run",
   trailingSlash: "always",
+  redirects: pageRedirects,
   adapter: cloudflare({
     imageService: "passthrough",
   }),

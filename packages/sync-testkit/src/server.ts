@@ -69,6 +69,10 @@ export async function startServer(runtime: Runtime, checkoutRoot = defaultRoot):
       // Production community Worker/DO/D1/R2. Managed policy has separate API integration coverage.
       delete config.env;
       delete config.secrets;
+      // The copied config runs in temporary storage; resolve custom builds from the API checkout.
+      if (config.build?.command) {
+        config.build.cwd = path.resolve(apiRoot, config.build.cwd ?? ".");
+      }
       config.main = path.join(apiRoot, config.main);
       config.assets.directory = path.join(apiRoot, config.assets.directory);
       config.vars = { ...config.vars, ...vars, BETTER_AUTH_URL: baseUrl };

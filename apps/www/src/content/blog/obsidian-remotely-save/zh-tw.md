@@ -1,249 +1,155 @@
 ---
 title: "Obsidian Remotely Save：設定、優缺點與替代方案"
-description: "了解 Obsidian 社群外掛 Remotely Save 的儲存後端、加密、衝突處理、行動端同步，以及它和 Synch 的差異。"
+description: "跟著實際設定畫面，用 Remotely Save 和 Dropbox 同步 Obsidian。從帳號授權、加密到手機連線，也整理了免費與 PRO 的差別，以及筆記、附件無法同步的排查方式。"
 pubDate: 2026-05-11
+updatedDate: 2026-10-03
 ---
 
-如果你想在不購買官方 Sync 的情況下同步 Obsidian，**Remotely Save** 通常會很快進入候選名單。
+**Remotely Save 能透過你選擇的雲端儲存服務，同步 Obsidian 儲存庫。** 在電腦和手機各自裝好外掛，連上相同帳號與遠端儲存庫，就能接續使用筆記。換裝置編輯前，記得先讓兩邊完成同步。
 
-它受歡迎的原因很明確：你不必被綁在某一個同步服務上，而是可以把 Obsidian vault 接到自己選的儲存空間。它支援 S3 相容儲存、WebDAV、Dropbox、OneDrive、Google Drive、Box、pCloud、Koofr、Azure Blob Storage 等後端，其中部分功能會依方案而不同。
+這篇以 Dropbox 為例，帶你從第一次連線做到第二台裝置下載筆記，最後再確認修改能傳回原本的電腦。如果已經設定過，只是筆記一直沒出現，可以往下看「同步不順時，先檢查哪裡？」。
 
-它的重點是彈性。
+Remotely Save 是社群外掛，與官方 Obsidian Sync 是不同的服務。儲存空間、存取權限和資料復原方式，都需要自己安排。
 
-但彈性也代表設定與維護的責任會回到你身上。
+## 哪些雲端服務可以免費連接？
 
-如果你已經知道要把 vault 資料放在哪裡，也願意仔細設定同步選項，Remotely Save 可能很適合你。反過來，如果你真正想要的是一個簡單、針對 Obsidian 設計的同步服務，其他工具可能會更省事。
+外掛提供免費的連接功能，也有付費的 PRO 功能。這裡的「免費」指的是外掛功能；雲端服務仍可能收取容量、傳輸或 API 使用費。
 
-這篇文章會整理 Remotely Save 的運作方式、適合哪些人、需要注意什麼，以及 Synch 這類替代方案在什麼情況下更自然。
-
-![連接到多個自帶儲存後端的 Obsidian vault](./remotely-save-storage-options.webp)
-
-## Remotely Save 是什麼？
-
-[Remotely Save](https://github.com/remotely-save/remotely-save) 是一個非官方 Obsidian 社群外掛，用來在本機 vault 和遠端雲端儲存之間同步筆記。
-
-它不是 Obsidian 官方的 Sync 服務。它以外掛形式在 Obsidian 裡執行，並使用你選擇的儲存服務作為遠端同步位置。
-
-基本模型可以這樣看：
-
-```txt
-裝置 A 上的 Obsidian vault
-        |
-Remotely Save 外掛
-        |
-你選擇的遠端儲存
-        |
-Remotely Save 外掛
-        |
-裝置 B 上的 Obsidian vault
-```
-
-遠端儲存會成為裝置之間的中繼點。依照設定，它可能是 S3 相容 bucket、WebDAV 伺服器、Dropbox、OneDrive、Google Drive，或其他支援的服務。
-
-## 為什麼有人選 Remotely Save
-
-主要原因是控制權。
-
-使用官方 Obsidian Sync 時，同步服務由 Obsidian 提供。使用 Remotely Save 時，你可以自帶儲存空間。對於已經有信任的雲端帳號、想把資料放在特定位置、或不想依賴單一託管同步產品的人來說，這很有吸引力。
-
-它特別適合這些情況：
-
-- 你想透過已經信任的儲存空間同步 Obsidian
-- 你想使用 Cloudflare R2、Backblaze B2、MinIO、Amazon S3 等 S3 相容儲存
-- 你想使用自架伺服器、Synology、Nextcloud 或其他 WebDAV 環境
-- 你偏好 Obsidian 外掛流程，而不是另外安裝桌面同步工具
-- 你希望行動端和桌面端透過同一個外掛同步
-- 你願意在真正同步重要 vault 前仔細閱讀設定並測試
-
-對技術使用者來說，這種彈性有時比最簡單的安裝流程更重要。
-
-## 支援的儲存後端
-
-Remotely Save 支援多種儲存後端。實際清單可能隨外掛版本和功能方案變動，但專案文件列出了以下選項。
-
-| 儲存後端 | 為什麼選它 | 主要取捨 |
+| 雲端服務 | 外掛功能 | 選擇前先確認 |
 | --- | --- | --- |
-| S3 相容儲存 | 彈性高、成本可控，可用於 R2、B2、MinIO、S3 等服務 | 需要理解 bucket、金鑰、endpoint 和費用 |
-| WebDAV | 適合自架服務、NAS、Nextcloud 等環境 | 穩定性很依賴 WebDAV 伺服器品質 |
-| Dropbox | 熟悉的通用雲端硬碟 | 依賴的是通用雲端硬碟，不是 Obsidian 專用同步 |
-| OneDrive | 對 Microsoft 個人帳號使用者方便 | 免費版使用 App Folder；個人 OneDrive 全域存取是 PRO 功能，Business 帳號不是文件中的主要目標 |
-| Google Drive | 很多人已經在使用 | Google Drive 支援是 PRO connect 功能 |
-| Box、pCloud、Koofr、Azure Blob 等 | 已經使用這些服務時很方便 | 這些列出的提供商屬於 PRO connect 功能 |
+| Dropbox | 免費 | 剩餘空間，以及各裝置要用的帳號 |
+| S3 相容儲存服務 | 免費 | 儲存桶、端點、金鑰、儲存與 API 費用 |
+| WebDAV | 免費 | 伺服器網址、驗證方式、相容性 |
+| 個人版 OneDrive，App Folder | 免費 | 使用應用程式專用資料夾，不是任意既有資料夾 |
+| 個人版 OneDrive，Full | PRO | 存取應用程式資料夾以外的位置時需要 |
+| Google Drive | PRO | 須啟用對應功能並完成授權 |
+| Box、pCloud、Yandex Disk、Koofr、Azure Blob | PRO | 連接功能與服務本身的使用限制 |
 
-這正是 Remotely Save 和許多 Obsidian 同步替代方案的主要差異。它不只是同步服務，更像是 Obsidian 和多種遠端儲存之間的橋。
+決定之前，先核對專案的[支援服務清單](https://github.com/remotely-save/remotely-save/blob/master/docs/services_connectable_or_not.md)。如果還沒選定做法，也可以參考[免費同步 Obsidian 的方案比較](/zh-tw/blog/free-obsidian-sync/)。
 
-這座橋很有用，但橋另一端的儲存系統如何運作，你也需要理解。
+## 用 Dropbox 開始同步
 
-## 基本設定流程
+以下步驟適用於**第一次建立同步設定**。若兩台裝置已經各自修改過同一份儲存庫，請先把兩邊都備份下來，不要交給第一次同步決定留下哪一份。
 
-不同提供商的細節不同，但大多數 Remotely Save 設定大致如下：
+### 1. 先留備份，再做小規模測試
 
-1. 先在同步目標之外備份 Obsidian vault。
-2. 從 Obsidian 社群外掛瀏覽器安裝 Remotely Save。
-3. 在外掛設定中選擇遠端服務。
-4. 輸入憑證、endpoint、bucket、資料夾或授權資訊。
-5. 決定是否啟用加密。
-6. 決定是否略過大檔案或排除特定路徑。
-7. 執行第一次同步。
-8. 在其他裝置上安裝並設定外掛。
-9. 在多裝置編輯前，確認同一個 vault 能正確顯示。
+從筆記最完整的那台裝置開始。把整個儲存庫複製到同步範圍以外的位置，確認備份可以正常開啟。
 
-第一步最重要。任何同步工具都可能快速傳播錯誤。把真實 vault 接入新同步系統之前，應該先在外掛碰不到的位置保留完整副本。
+同一個使用中的儲存庫，交給一套同步工具即可。Remotely Save 會自行連接 Dropbox，因此不要同時將儲存庫放進 Dropbox 桌面版的同步資料夾，讓兩套工具一起處理它。
 
-## Remotely Save 的加密
+第一次可以先建立一個小型測試儲存庫，例如 `Notes-Sync-Test`。名稱要與同一 Dropbox 帳號裡既有的遠端儲存庫區分開來。新增一篇「同步測試」筆記，寫一句等一下能在手機上認出的文字。
 
-Remotely Save 支援以密碼為基礎的端對端加密。如果你設定了加密密碼，檔案會在送到遠端儲存前被加密。
+### 2. 安裝並啟用外掛
 
-如果你要把私人筆記放到通用雲端硬碟或物件儲存裡，這是一個重要功能。
+開啟 Obsidian 的**設定 → 社群外掛**，依提示允許使用社群外掛，再從外掛清單搜尋 **Remotely Save**，安裝並啟用。先進入 Remotely Save 設定，再執行同步。
 
-但仍然有幾點需要理解：
+下方截圖是舊版 Obsidian 的畫面，選項名稱和位置可能與目前版本不同。
 
-- 每台裝置上的加密設定都必須正確一致。
-- 如果忘記加密密碼，可能無法從遠端儲存恢復已同步資料。
-- 某些中繼資料的處理方式可能不同於專門設計的加密同步服務。
-- 外掛設定檔可能包含敏感資訊，不應該分享或提交到 Git。
+### 3. 連接 Dropbox 帳號
 
-加密不是隨手勾選的選項。它會改變復原模型。真正依賴它之前，先用小 vault 測試，並確認另一台裝置可以正確解密。
+在 Remotely Save 的 **Choose service** 選擇 **Dropbox**，按下 **Auth**。用瀏覽器開啟外掛提供的連結，確認登入的是你要使用的 Dropbox 帳號，再允許連接。回到 Obsidian 後，確認外掛已顯示連線成功。
 
-## 衝突處理
+![Remotely Save 設定中的 Dropbox 選單與 Auth 授權按鈕](./dropbox-choose-service.webp)
 
-Obsidian 同步裡的衝突處理，比一般檔案上傳重要得多。
+*選好 Dropbox，再按 Auth。*
 
-Obsidian vault 會產生很多小變更。你可能在電腦上修改 Markdown 筆記，同時又在手機上改了同一篇。某個外掛可能在另一台裝置上更新設定檔。大附件還在上傳時，另一台裝置可能已經開始編輯相關內容。如果兩台裝置在看到彼此最新狀態前都修改了相關檔案，同步工具就必須決定如何處理。
+文件說明，檔案會放在 Dropbox 的 `/Apps/remotely-save` 底下。預設是用儲存庫名稱區分同步位置，因此其他裝置也要取相同名稱。存取範圍可參考 [Dropbox 連接說明](https://github.com/remotely-save/remotely-save#dropbox)。
 
-Remotely Save 提供基本衝突偵測和處理，更進階的 Smart Conflict 行為由 PRO merge 功能提供。它能幫忙，但不能取代良好的同步習慣。
+![Dropbox 授權完成後，畫面顯示連線狀態和 Revoke Auth 按鈕](./dropbox-connected.webp)
 
-最好避免：
+*這個介面在連接後會將 Auth 改成 Revoke Auth。帳號連好後，還要執行同步，筆記才會開始傳送。*
 
-- 在兩台裝置上大量編輯同一篇筆記後才同步
-- 在同一個 active vault 上同時執行多個同步系統
-- 把雲端後端當成完整備份
-- 不理解行動端和桌面端差異就同步外掛設定
-- 把衝突副本當成無關緊要的小問題
+### 4. 第一次上傳前，決定是否加密
 
-重要 vault 必須有獨立備份。同步讓裝置保持一致。備份是在錯誤狀態被同步出去後可以回到的地方。
+若要使用端對端加密，請在第一次上傳前設定好。把密碼存進密碼管理工具，也記下選用的加密格式。每台裝置都必須使用相同格式與密碼。
 
-![兩台裝置同時編輯同一個 Obsidian vault 時的衝突風險](./sync-conflict-risk.webp)
+專案文件介紹了 [Rclone Crypt 與 OpenSSL 格式](https://github.com/remotely-save/remotely-save/blob/master/docs/encryption/README.md)。加密需要另外設定，不會因為連上雲端帳號就自動啟用。Dropbox 的說明也指出，儲存庫名稱本身不會加密。
 
-## 行動端同步
+已經在用的遠端儲存庫，不要為了測試問題而隨意更改加密密碼或格式。先保留可讀取的本機副本，再依加密文件處理既有設定。
 
-Remotely Save 支援 Obsidian 行動端，這也是它受歡迎的原因之一。
+### 5. 手動跑完第一次同步
 
-很多通用檔案同步工具在桌面端還可以，但在手機和平板上會受限。Android 和 iOS 都限制背景活動、檔案存取和長時間任務。執行在 Obsidian 內部的外掛，往往比單獨的檔案同步 App 更容易使用。
+點選 Obsidian 側邊工具列上的 Remotely Save 同步圖示，或從命令面板執行同步指令。完成前讓 Obsidian 保持開啟；若出現錯誤，先排除，再加入第二台裝置。
 
-不過行動端仍然有現實限制：
+![Obsidian 畫面中標出的同步圖示，以及右側的同步進度通知](./dropbox-run-sync.webp)
 
-- 同步通常在 Obsidian 開啟時更可靠。
-- 大檔案在行動端可能很慢，甚至出問題。
-- OAuth 和登入流程可能因平台而異。
-- 行動網路切換可能中斷長時間同步。
-- 各裝置上的外掛設定需要保持一致。
+*按下標示的同步按鈕，確認完成後再換裝置。*
 
-對於以 Markdown 為主的小 vault，這可能完全夠用。對於包含大量附件、大 PDF、錄音檔，或經常跨裝置編輯的 vault，應該先認真測試，再把它當成主要同步方案。
+測試期間先關閉定時同步，手動執行比較容易看出每一步的結果。也請檢查檔案大小限制和路徑排除規則：顯示同步完成，不代表被排除的附件也有傳過去。
 
-## Remotely Save vs Obsidian Sync
+### 6. 加入手機或另一台電腦
 
-Remotely Save 和 Obsidian Sync 解決的問題有重疊，但承諾不同。
+1. 建立一個**同名**的空白本機儲存庫。iPhone 或 iPad 上，請關閉這個儲存庫的 **Store in iCloud** 選項。
+2. 在新儲存庫安裝並啟用 Remotely Save。
+3. 選擇 Dropbox，授權相同帳號。
+4. 若有加密，填入與第一台裝置一致的格式和密碼；若自行指定遠端位置，也要一致。
+5. 手動同步，完成前保持 App 開啟。
+6. 打開「同步測試」，確認第一台裝置寫的那句話已經出現。
 
-| 方案 | 最適合 | 優勢 | 取捨 |
-| --- | --- | --- | --- |
-| Remotely Save | 想自帶儲存的使用者 | 儲存提供商選擇彈性高 | 設定和後端責任更多 |
-| Obsidian Sync | 想要官方整合服務的使用者 | 體驗成熟，和 Obsidian 整合好 | 付費訂閱和專有託管服務 |
+用空白儲存庫開始，是為了避免一開始就混進兩份各自修改過的內容。第一台裝置的備份仍要保留。
 
-如果你想要最少摩擦，Obsidian Sync 通常更容易推薦。它由 Obsidian 團隊建立，並直接整合在 App 裡。
+### 7. 確認修改也能傳回去
 
-如果你更在意自己選擇儲存提供商，Remotely Save 更彈性。
+在第二台裝置的「同步測試」多寫一句話，完成同步。接著回到第一台裝置執行同步，看看新文字有沒有出現。如果經常使用附件，也用一個小檔案試試看。
 
-## Remotely Save vs Syncthing
+確認雙向傳輸都正常，再開啟定時同步，開始日常使用。之後換裝置時，先同步剛用完的那台，再同步接下來要用的那台，最後才開始編輯。
 
-Syncthing 也是同步 Obsidian vault 的常見免費選擇。它是開源的，並採用點對點模式，也就是裝置之間可以直接同步，不需要中央雲端儲存。
+## 手機上使用，要留時間讓同步完成
 
-這對桌面到桌面的環境很強。
+Remotely Save 支援行動版 Obsidian，但建議以**開著 App 完成同步**為使用習慣。即使設了定時同步，作業系統暫停 App 之後，外掛也不一定能繼續執行。
 
-取捨在於可用性。裝置通常需要在合適的時間在線。行動端設定也可能更彆扭，尤其是你希望整個體驗自然地留在 Obsidian 裡時。
+第一次下載時，請把附件需要的時間也算進去。如果中途被打斷，重新開啟 Obsidian，檢查錯誤訊息並確認檔案到齊，再繼續編輯。
 
-Remotely Save 使用遠端儲存作為中繼站。Syncthing 使用裝置到裝置同步。哪一個更好，取決於你更喜歡雲端中繼，還是點對點。
+專案的[限制說明](https://github.com/remotely-save/remotely-save#limitations)提到，行動裝置處理大型檔案可能遇到效能問題，包括 50 MB 以上的檔案。筆記正常但 PDF、錄音沒出現時，可以先看大型檔案的排除設定。其他選擇可參考 [iPhone 與 Android 之間的 Obsidian 同步方式](/zh-tw/blog/obsidian-iphone-android-sync/)。
 
-## Remotely Save vs Self-hosted LiveSync
+## 同步不順時，先檢查哪裡？
 
-Self-hosted LiveSync 是一個強大的 Obsidian 同步外掛，適合想要更進階自託管同步系統的使用者。如果你能執行並維護後端基礎設施，它可以很有吸引力。
+用一篇小型測試筆記，在兩台裝置上依序手動同步。記下是哪台失敗、顯示什麼錯誤，才能分辨問題出在上傳、下載，還是只有特定檔案被排除。
 
-和 Remotely Save 相比，Self-hosted LiveSync 對同步架構更有自己的模型。Remotely Save 的優勢是儲存後端選擇更廣。LiveSync 在你接受它的模型並能正確維運時會更強。
+| 遇到的狀況 | 先確認 | 接下來怎麼處理 |
+| --- | --- | --- |
+| 授權一直無法完成 | 瀏覽器帳號、是否回到 Obsidian | 重跑授權流程，確認連線狀態 |
+| 顯示完成，另一台卻還是空的 | 帳號、儲存庫名稱、自訂遠端位置 | 比較兩邊設定，確認第一台已上傳 |
+| 加密檔案讀不出來 | 密碼、加密格式 | 留下可讀取的副本，再核對原設定 |
+| 筆記有到，附件沒到 | 大小限制、排除路徑 | 比對缺少檔案的條件與錯誤訊息 |
+| 手機要打開 App 才更新 | App 是否被暫停、同步時機 | 編輯前後開啟 App 並手動同步 |
+| WebDAV 或 S3 連不上 | 網址、金鑰、權限、錯誤內容 | 按照該服務的設定文件逐項確認 |
+| 筆記重複或修改內容不見 | 同時編輯、其他同步工具 | 暫停其他裝置的編輯，保留各版本後再合併 |
 
-對非技術使用者來說，兩者都可能比預期更像是在維護基礎設施。
+不要抱著試試看的心態刪除遠端儲存庫、重裝外掛，或刪掉唯一完整的本機副本。檔案不見時，先保住還在的內容，再查備份與可用的版本紀錄。[同步衝突與筆記遺失指南](/zh-tw/blog/obsidian-sync-conflicts/)也整理了常見原因和復原時的注意事項。
 
-## 什麼時候 Remotely Save 很適合
+### Google Drive 手動上傳的檔案看不到
 
-如果你喜歡自己配置同步堆疊，Remotely Save 值得考慮。
+Google Drive 連接是 **PRO 功能**，要先啟用對應功能，再從外掛進行授權。
 
-它適合這些情況：
+[Google Drive 文件](https://github.com/remotely-save/remotely-save/blob/master/docs/remote_services/googledrive/README.md)也說明，外掛能存取的是自己建立的檔案與資料夾。直接從 Drive 網站上傳儲存庫，並不會讓外掛看見那些檔案。請先備份本機儲存庫，再透過 Obsidian 裡的外掛上傳。[Google Drive 同步指南](/zh-tw/blog/obsidian-google-drive-sync/)另有說明外掛與桌面同步資料夾的差別。
 
-- 你已經有偏好的儲存提供商
-- 你想使用 S3、R2、B2、MinIO、WebDAV 或其他特定後端
-- 你能管理憑證和外掛設定
-- 你理解同步不是備份
-- 你願意先用 vault 副本測試
-- 你想使用社群外掛，而不是專門的託管同步服務
+### OneDrive 帳號或空白檔案出錯
 
-在這些情境下，Remotely Save 可能正是你需要的工具。
+免費連接適用於**個人版 OneDrive 的 App Folder**，公司或學校帳號不能直接視為相同設定。個人版 OneDrive 的完整存取是另一項 PRO 功能。
 
-## 什麼時候 Remotely Save 可能不適合
+[OneDrive 文件](https://github.com/remotely-save/remotely-save/blob/master/docs/remote_services/onedrive/README.md)還提到，API 不允許上傳空白檔案。若空白 Markdown 筆記造成錯誤，可以查看外掛的空白檔案處理設定，或寫入實際內容再試一次。
 
-如果你的真正目標只是「盡量少設定，讓 Obsidian 私密同步」，Remotely Save 可能不是最合適的選擇。
+## 別忘了保護設定檔與保留備份
 
-如果你符合下面這些情況，可以考慮其他方案：
+Remotely Save 的 `data.json` 可能包含敏感設定。不要放進公開 Git 儲存庫、求助截圖或問題回報的附件。分享錯誤資訊時，也要移除權杖、登入憑證及私人筆記內容。
 
-- 不想選擇或設定儲存後端
-- 不想管理存取金鑰、WebDAV URL、bucket 或服務專屬設定
-- 想要圍繞 Obsidian vault 行為設計的同步服務
-- 想在不使用官方 Obsidian Sync 的情況下使用託管同步
-- 希望多裝置啟用和復原流程更簡單
+免費版有基本衝突處理，進階智慧衝突處理則是 PRO 功能。無論用哪一種，兩台裝置都改過同一篇筆記時，仍應檢查雙方內容。先留副本再合併，確認結果已正確同步到另一台，才繼續編輯。
 
-區別很清楚：
+備份請放在同步範圍之外。刪除或誤改也可能跟著同步；能復原多少，取決於實際留下來的備份和版本紀錄。
 
-Remotely Save 是給願意自帶儲存的人使用的彈性同步外掛。
+## 什麼情況適合改用其他方案？
 
-這和想要一個開箱即用的 Obsidian 同步服務並不是同一件事。
+如果已經有偏好的雲端服務，也願意自己管理設定，Remotely Save 就很適合。雙向測試正常後，不需要只是因為有其他工具就換掉它。
 
-## 更簡單的替代方案：Synch
+若想省下維護儲存連線的工作，可以考慮代管服務：
 
-如果你喜歡 Remotely Save 的私密同步方向，但不想自己選擇和設定後端，可以考慮 [Synch](https://synch.run/)。
+| 方案 | 適合的需求 | 要考慮的事 |
+| --- | --- | --- |
+| Remotely Save | 自選 Dropbox、WebDAV、S3 等儲存服務 | 連線、憑證、排除規則與復原管理 |
+| Obsidian Sync | 使用官方整合服務 | 付費訂閱與同步項目設定 |
+| Synch | 使用開源、端對端加密的代管服務 | 方案容量和單檔限制是否符合需求 |
 
-Synch 是為 Obsidian 使用者建立的開源端對端加密同步服務。它不要求你自帶儲存提供商再接入外掛，而是提供託管同步層，並直接圍繞 Obsidian vault 工作流程設計。
+[Synch](/zh-tw/)提供同步服務，不用另外連接雲端儲存帳號。如果也在考慮裝置間直接同步、自架服務或 Git，可以看看 [Obsidian Sync 替代方案比較](/zh-tw/blog/obsidian-sync-alternatives/)。
 
-可以這樣選：
-
-| 選擇 Remotely Save，如果... | 選擇 Synch，如果... |
-| --- | --- |
-| 你想自帶儲存 | 你想要託管 Obsidian 同步 |
-| 你熟悉提供商設定 | 你想減少設定 |
-| 你已經使用 S3、WebDAV、Dropbox 等後端 | 你想要圍繞 vault 設計的服務 |
-| 你最重視後端彈性 | 你想要更簡單的加密同步路徑 |
-
-Remotely Save 仍然很適合想控制儲存層的使用者。Synch 更適合那些真正想要私密 Obsidian 同步，而不是把選擇儲存變成另一個專案的人。
-
-![透過託管服務加密同步到多台裝置的 Obsidian vault](./hosted-encrypted-sync.webp)
-
-## 實用安全清單
-
-無論選擇哪種同步方式，在連接重要 vault 前都建議做到：
-
-- 第一次同步前做完整備份。
-- 先用小 vault 測試。
-- 不要在同一個 active vault 上執行兩個同步工具。
-- 在第二台裝置上確認加密和解密都正常。
-- 不要把憑證和外掛設定提交到 Git。
-- 觀察 `.obsidian` 設定會如何同步。
-- 即使同步看起來正常，也保留獨立備份。
-
-最後一點不是可選項。同步工具的目標是讓裝置達成一致。如果錯誤刪除或空檔案成了共同狀態，你需要一個在同步循環之外的備份。
-
-## 總結
-
-Remotely Save 是一個很有價值的 Obsidian 同步外掛，因為它給你選擇權。你可以連接已經使用的儲存空間，設定加密，在桌面和行動端同步，並避免被鎖定在一個官方服務裡。
-
-但這種選擇也帶來責任。你需要選擇後端、正確設定、理解限制，並測試復原路徑。
-
-如果你想要這種控制權，Remotely Save 值得認真考慮。
-
-如果你主要想要的是移動部件更少的私密託管端對端加密 Obsidian 同步，Synch 可能是更簡單的選擇。
+圖片來源：[Remotely Save 官方 Dropbox 文件，步驟 10、12、13](https://github.com/remotely-save/remotely-save/blob/master/docs/dropbox_review_material/README.md#steps)。

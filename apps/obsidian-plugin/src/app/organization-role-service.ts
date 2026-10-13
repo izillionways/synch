@@ -1,4 +1,5 @@
 import { OrganizationApiUnavailableError, RemoteVaultClient } from "@synch/sync-client/remote";
+import { ContextRequestCache } from "./context-request-cache";
 import { defaultHttpClient } from "../adapters/http";
 
 interface OrganizationRoleServiceDeps {
@@ -11,66 +12,52 @@ interface OrganizationRoleServiceDeps {
 
 export class SynchOrganizationRoleService {
   private readonly client = new RemoteVaultClient(defaultHttpClient);
-  private contextKey = "";
   private role: string | null = null;
   private apiUnavailable = false;
-  private checkedAt: number | null = null;
-  private pending: Promise<void> | null = null;
-
-  constructor(private readonly deps: OrganizationRoleServiceDeps) {}
-
-  getOrganizationRole(): string | null {
-    this.checkContext();
-    return this.role;
-  }
-
-  isOrganizationRoleApiUnavailable(): boolean {
-    this.checkContext();
-    return this.apiUnavailable;
-  }
-
-  async ensureOrganizationRoleCheck(): Promise<void> {
-    this.checkContext();
-    const organizationId = this.deps.getOrganizationId();
-    if (!this.deps.hasAuthenticatedSession() || !organizationId) return;
-    if (this.pending) return this.pending;
-    if (this.checkedAt !== null && Date.now() - this.checkedAt < 30_000) return;
-
-    const contextKey = this.contextKey;
-    this.pending = this.client.listOrganizations(
-      this.deps.getApiBaseUrl(),
-      this.deps.getAuthSessionToken(),
-    ).then((organizations) => {
-      this.checkContext();
-      if (contextKey !== this.contextKey) return;
-      this.apiUnavailable = false;
-      this.role = organizations.find((org) => org.id === organizationId)?.role ?? null;
-    }).catch((error: unknown) => {
-      this.checkContext();
-      if (contextKey !== this.contextKey) return;
-      this.role = null;
-      this.apiUnavailable = error instanceof OrganizationApiUnavailableError;
-    }).finally(() => {
-      if (contextKey !== this.contextKey) return;
-      this.checkedAt = Date.now();
-      this.pending = null;
-      this.deps.refreshUi();
-    });
-    await this.pending;
-  }
-
-  private checkContext(): void {
-    const next = JSON.stringify([
+  private readonly cache = new ContextRequestCache({
+    getContextKey: () => JSON.stringify([
       this.deps.getApiBaseUrl(),
       this.deps.getAuthSessionToken(),
       this.deps.hasAuthenticatedSession(),
       this.deps.getOrganizationId(),
-    ]);
-    if (next === this.contextKey) return;
-    this.contextKey = next;
-    this.role = null;
-    this.apiUnavailable = false;
-    this.checkedAt = null;
-    this.pending = null;
+    ]),
+    intervalMs: 30_000,
+    onInvalidate: () => {
+      this.role = null;
+      this.apiUnavailable = false;
+    },
+    onSettled: () => this.deps.refreshUi(),
+  });
+
+  constructor(private readonly deps: OrganizationRoleServiceDeps) {}
+
+  getOrganizationRole(): string | null {
+    this.cache.syncContext();
+    return this.role;
+  }
+
+  isOrganizationRoleApiUnavailable(): boolean {
+    this.cache.syncContext();
+    return this.apiUnavailable;
+  }
+
+  async ensureOrganizationRoleCheck(): Promise<void> {
+    this.cache.syncContext();
+    const organizationId = this.deps.getOrganizationId();
+    if (!this.deps.hasAuthenticatedSession() || !organizationId) return;
+    await this.cache.run(
+      () => this.client.listOrganizations(
+        this.deps.getApiBaseUrl(),
+        this.deps.getAuthSessionToken(),
+      ),
+      (organizations) => {
+        this.apiUnavailable = false;
+        this.role = organizations.find((org) => org.id === organizationId)?.role ?? null;
+      },
+      (error) => {
+        this.role = null;
+        this.apiUnavailable = error instanceof OrganizationApiUnavailableError;
+      },
+    );
   }
 }

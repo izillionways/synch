@@ -4,5 +4,5 @@
     "types": ["astro/client", "@cloudflare/workers-types"]
   },
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"]
+  "exclude": ["dist", "storybook-static"]
 }

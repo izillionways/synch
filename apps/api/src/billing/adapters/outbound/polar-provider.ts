@@ -1,10 +1,4 @@
-import { Polar } from "@polar-sh/sdk";
-import type { Subscription } from "@polar-sh/sdk/models/components/subscription";
-import { AlreadyCanceledSubscription } from "@polar-sh/sdk/models/errors/alreadycanceledsubscription";
-import { PaymentFailed } from "@polar-sh/sdk/models/errors/paymentfailed";
-import { SubscriptionLocked } from "@polar-sh/sdk/models/errors/subscriptionlocked";
-import { ResourceNotFound } from "@polar-sh/sdk/models/errors/resourcenotfound";
-import { HTTPValidationError } from "@polar-sh/sdk/models/errors/httpvalidationerror";
+import { createPolar, errors, type models, type Polar } from "@polar-sh/sdk/2026-10";
 
 import type { BillingProvider } from "../../application/ports/outbound/billing-provider";
 import type {
@@ -12,6 +6,8 @@ import type {
 	PolarSubscriptionUpsertInput,
 } from "../../application/dto/billing";
 import { BillingApplicationError } from "../../application/errors/billing-errors";
+
+type Subscription = models.Subscription;
 
 export class PolarBillingProvider implements BillingProvider {
 	constructor(private readonly config: BillingProviderConfig) {}
@@ -24,8 +20,8 @@ export class PolarBillingProvider implements BillingProvider {
 		const customerId = await this.checkoutCustomerId(client, input);
 		const checkout = await client.checkouts.create({
 			products: [input.productId],
-			customerId,
-			successUrl: new URL(
+			customer_id: customerId,
+			success_url: new URL(
 				`/billing/success?checkout_id={CHECKOUT_ID}&organizationId=${encodeURIComponent(input.organizationId)}`,
 				this.config.wwwBaseUrl,
 			).toString(),
@@ -54,16 +50,16 @@ export class PolarBillingProvider implements BillingProvider {
 		// customer first so a duplicate email fails before any checkout is opened.
 		try {
 			const customer = await client.customers.create({
-				externalId: input.organizationId,
+				external_id: input.organizationId,
 				email: input.email,
 			});
 			return customer.id;
 		} catch (error) {
-			if (!(error instanceof HTTPValidationError)) throw error;
+			if (!(error instanceof errors.HTTPValidationError)) throw error;
 			// Another request may have just created this same organization's customer.
 			const concurrent = await this.findOrganizationCustomerId(client, input.organizationId);
 			if (concurrent) return concurrent;
-			if (error.detail?.some((detail) => detail.loc.join(".") === "body.email")) {
+			if (error.error.detail?.some((detail) => detail.loc.join(".") === "body.email")) {
 				throw new BillingApplicationError("billing_email_unavailable");
 			}
 			throw error;
@@ -72,9 +68,9 @@ export class PolarBillingProvider implements BillingProvider {
 
 	private async findOrganizationCustomerId(client: Polar, organizationId: string): Promise<string | null> {
 		try {
-			return (await client.customers.getExternal({ externalId: organizationId })).id;
+			return (await client.customers.getExternal(organizationId)).id;
 		} catch (error) {
-			if (error instanceof ResourceNotFound) return null;
+			if (error instanceof errors.ResourceNotFound) return null;
 			throw error;
 		}
 	}
@@ -90,21 +86,18 @@ export class PolarBillingProvider implements BillingProvider {
 
 		let subscription: Subscription;
 		try {
-			subscription = await this.client().subscriptions.update({
-				id: input.polarSubscriptionId,
-				subscriptionUpdate: {
-					productId: input.productId,
-					prorationBehavior: "invoice",
-				},
+			subscription = await this.client().subscriptions.update(input.polarSubscriptionId, {
+				product_id: input.productId,
+				proration_behavior: "invoice",
 			});
 		} catch (error) {
-			if (error instanceof AlreadyCanceledSubscription) {
+			if (error instanceof errors.SubscriptionsUpdate403Error && error.error.error === "AlreadyCanceledSubscription") {
 				throw new BillingApplicationError("subscription_canceled");
 			}
-			if (error instanceof PaymentFailed) {
+			if (error instanceof errors.SubscriptionsUpdate402Error && error.error.error === "PaymentFailed") {
 				throw new BillingApplicationError("payment_failed");
 			}
-			if (error instanceof SubscriptionLocked) {
+			if (error instanceof errors.SubscriptionsUpdate409Error && error.error.error === "SubscriptionLocked") {
 				throw new BillingApplicationError("subscription_locked");
 			}
 			throw error;
@@ -121,19 +114,19 @@ export class PolarBillingProvider implements BillingProvider {
 			throw new Error("POLAR_ACCESS_TOKEN is not configured");
 		}
 		const session = await this.client().customerSessions.create({
-			customerId: input.polarCustomerId,
-			returnUrl: input.returnUrl,
+			customer_id: input.polarCustomerId,
+			return_url: input.returnUrl,
 		});
-		return { url: session.customerPortalUrl };
+		return { url: session.customer_portal_url };
 	}
 
 	client(): Polar {
 		if (!this.config.accessToken) {
 			throw new Error("POLAR_ACCESS_TOKEN is not configured");
 		}
-		return new Polar({
+		return createPolar({
 			accessToken: this.config.accessToken,
-			server: this.config.sandbox ? "sandbox" : "production",
+			environment: this.config.sandbox ? "sandbox" : "production",
 		});
 	}
 }
@@ -184,15 +177,15 @@ export function toPolarSubscriptionUpsertInput(
 ): PolarSubscriptionUpsertInput {
 	return {
 		id: `polar-sub-${subscription.id}`,
-		productId: subscription.productId,
+		productId: subscription.product_id,
 		organizationId,
-		polarCustomerId: subscription.customerId,
+		polarCustomerId: subscription.customer_id,
 		polarSubscriptionId: subscription.id,
-		polarCheckoutId: subscription.checkoutId,
+		polarCheckoutId: subscription.checkout_id,
 		status: subscription.status,
-		periodStart: subscription.currentPeriodStart,
-		periodEnd: subscription.currentPeriodEnd,
-		cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+		periodStart: new Date(subscription.current_period_start),
+		periodEnd: new Date(subscription.current_period_end),
+		cancelAtPeriodEnd: subscription.cancel_at_period_end,
 	};
 }
 

@@ -94,17 +94,11 @@ signupUrl.searchParams.set("lang", locale);
 
           <ol class="space-y-3 list-decimal list-inside marker:text-zinc-700">
             {
-              t.installSteps.map((step) => (
+              t.installSteps.map(([before, highlighted, after]) => (
                 <li>
-                  {step.length === 1 ? (
-                    <>{step[0]} </>
-                  ) : (
-                    <>
-                      {step[0] && <>{step[0]}</>}{" "}
-                      <span class="text-zinc-300">{step[1]}</span>
-                      {step[2]}
-                    </>
-                  )}
+                  {before && <>{before}</>}{" "}
+                  <span class="text-zinc-300">{highlighted}</span>
+                  {after}
                 </li>
               ))
             }

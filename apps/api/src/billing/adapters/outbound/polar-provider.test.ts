@@ -1,40 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { errors } from "@polar-sh/sdk/2026-10";
+
 const polarMocks = vi.hoisted(() => ({
 	checkoutsCreate: vi.fn(),
 	customersGetExternal: vi.fn(),
 	customersCreate: vi.fn(),
 	customerSessionsCreate: vi.fn(),
 	subscriptionsUpdate: vi.fn(),
-	Polar: vi.fn(function Polar(this: unknown, config: unknown) {
-		Object.assign(this as object, {
-			config,
-			checkouts: {
-				create: polarMocks.checkoutsCreate,
-			},
-			customers: {
-				getExternal: polarMocks.customersGetExternal,
-				create: polarMocks.customersCreate,
-			},
-			customerSessions: {
-				create: polarMocks.customerSessionsCreate,
-			},
-			subscriptions: {
-				update: polarMocks.subscriptionsUpdate,
-			},
-		});
-	}),
+	createPolar: vi.fn(() => ({
+		checkouts: { create: polarMocks.checkoutsCreate },
+		customers: { getExternal: polarMocks.customersGetExternal, create: polarMocks.customersCreate },
+		customerSessions: { create: polarMocks.customerSessionsCreate },
+		subscriptions: { update: polarMocks.subscriptionsUpdate },
+	})),
 }));
 
-vi.mock("@polar-sh/sdk", () => ({
-	Polar: polarMocks.Polar,
+vi.mock("@polar-sh/sdk/2026-10", async (importOriginal) => ({
+	...await importOriginal<typeof import("@polar-sh/sdk/2026-10")>(),
+	createPolar: polarMocks.createPolar,
 }));
-
-import { AlreadyCanceledSubscription } from "@polar-sh/sdk/models/errors/alreadycanceledsubscription";
-import { PaymentFailed } from "@polar-sh/sdk/models/errors/paymentfailed";
-import { SubscriptionLocked } from "@polar-sh/sdk/models/errors/subscriptionlocked";
-import { ResourceNotFound } from "@polar-sh/sdk/models/errors/resourcenotfound";
-import { HTTPValidationError } from "@polar-sh/sdk/models/errors/httpvalidationerror";
 
 import {
 	createPolarCheckout,
@@ -75,14 +60,14 @@ describe("createPolarCheckout", () => {
 			url: "https://polar.example/checkout-1",
 		});
 
-		expect(polarMocks.Polar).toHaveBeenCalledWith({
+		expect(polarMocks.createPolar).toHaveBeenCalledWith({
 			accessToken: "polar-token",
-			server: "sandbox",
+			environment: "sandbox",
 		});
 		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith({
 			products: ["starter-product"],
-			customerId: "customer-1",
-			successUrl: "https://synch.example/billing/success?checkout_id={CHECKOUT_ID}&organizationId=org-1",
+			customer_id: "customer-1",
+			success_url: "https://synch.example/billing/success?checkout_id={CHECKOUT_ID}&organizationId=org-1",
 			metadata: {
 				referenceId: "org-1",
 				organizationId: "org-1",
@@ -101,17 +86,12 @@ describe("createPolarCheckout", () => {
 		userId: "user-1",
 		email: "user@example.com",
 	};
-	const httpMeta = (status: number) => ({
-		response: new Response(null, { status }),
-		request: new Request("https://api.polar.sh/v1/customers/"),
-		body: "",
-	});
-	const missingCustomer = () => new ResourceNotFound(
-		{ error: "ResourceNotFound", detail: "Customer not found" }, httpMeta(404),
+	const missingCustomer = () => new errors.ResourceNotFound(404,
+		{ error: "ResourceNotFound", detail: "Customer not found" },
 	);
-	const duplicateEmail = () => new HTTPValidationError({
-		detail: [{ loc: ["body", "email"], type: "value_error", msg: "A customer with this email address already exists." }],
-	}, httpMeta(422));
+	const duplicateEmail = () => new errors.HTTPValidationError(422, {
+		detail: [{ loc: ["body", "email"], type: "value_error", msg: "A customer with this email address already exists.", input: null }],
+	});
 
 	it("creates the organization customer before opening checkout", async () => {
 		polarMocks.customersGetExternal.mockRejectedValueOnce(missingCustomer());
@@ -120,10 +100,10 @@ describe("createPolarCheckout", () => {
 
 		await createPolarCheckout({ accessToken: "polar-token" }, checkoutInput);
 
-		expect(polarMocks.customersGetExternal).toHaveBeenCalledWith({ externalId: "org-1" });
-		expect(polarMocks.customersCreate).toHaveBeenCalledWith({ externalId: "org-1", email: "user@example.com" });
-		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith(expect.objectContaining({ customerId: "new-customer" }));
-		expect(polarMocks.checkoutsCreate.mock.calls[0][0]).not.toHaveProperty("customerEmail");
+		expect(polarMocks.customersGetExternal).toHaveBeenCalledWith("org-1");
+		expect(polarMocks.customersCreate).toHaveBeenCalledWith({ external_id: "org-1", email: "user@example.com" });
+		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith(expect.objectContaining({ customer_id: "new-customer" }));
+		expect(polarMocks.checkoutsCreate.mock.calls[0][0]).not.toHaveProperty("customer_email");
 	});
 
 	it("reuses a stored legacy customer even when another admin pays", async () => {
@@ -133,7 +113,7 @@ describe("createPolarCheckout", () => {
 
 		expect(polarMocks.customersGetExternal).not.toHaveBeenCalled();
 		expect(polarMocks.customersCreate).not.toHaveBeenCalled();
-		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith(expect.objectContaining({ customerId: "legacy-customer" }));
+		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith(expect.objectContaining({ customer_id: "legacy-customer" }));
 	});
 
 	it("does not open checkout when the email belongs to another organization's customer", async () => {
@@ -154,7 +134,7 @@ describe("createPolarCheckout", () => {
 
 		await createPolarCheckout({ accessToken: "polar-token" }, checkoutInput);
 
-		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith(expect.objectContaining({ customerId: "concurrent-customer" }));
+		expect(polarMocks.checkoutsCreate).toHaveBeenCalledWith(expect.objectContaining({ customer_id: "concurrent-customer" }));
 	});
 
 	it("does not treat lookup outages as a missing customer", async () => {
@@ -208,7 +188,7 @@ describe("createPolarCheckout", () => {
 
 	it("creates a customer portal session", async () => {
 		polarMocks.customerSessionsCreate.mockResolvedValueOnce({
-			customerPortalUrl: "https://polar.example/portal/session-1",
+			customer_portal_url: "https://polar.example/portal/session-1",
 		});
 
 		await expect(
@@ -226,13 +206,13 @@ describe("createPolarCheckout", () => {
 			url: "https://polar.example/portal/session-1",
 		});
 
-		expect(polarMocks.Polar).toHaveBeenCalledWith({
+		expect(polarMocks.createPolar).toHaveBeenCalledWith({
 			accessToken: "polar-token",
-			server: "sandbox",
+			environment: "sandbox",
 		});
 		expect(polarMocks.customerSessionsCreate).toHaveBeenCalledWith({
-			customerId: "customer-1",
-			returnUrl: "https://synch.example/billing",
+			customer_id: "customer-1",
+			return_url: "https://synch.example/billing",
 		});
 	});
 
@@ -258,13 +238,13 @@ describe("updatePolarSubscriptionProduct", () => {
 	it("switches the subscription product with immediate proration", async () => {
 		polarMocks.subscriptionsUpdate.mockResolvedValueOnce({
 			id: "sub-1",
-			productId: "starter-annual-product",
-			customerId: "customer-1",
-			checkoutId: "checkout-1",
+			product_id: "starter-annual-product",
+			customer_id: "customer-1",
+			checkout_id: "checkout-1",
 			status: "active",
-			currentPeriodStart: new Date("2026-05-01T00:00:00.000Z"),
-			currentPeriodEnd: new Date("2027-05-01T00:00:00.000Z"),
-			cancelAtPeriodEnd: false,
+			current_period_start: "2026-05-01T00:00:00.000Z",
+			current_period_end: "2027-05-01T00:00:00.000Z",
+			cancel_at_period_end: false,
 			metadata: {
 				referenceId: "org-1",
 				organizationId: "org-1",
@@ -296,29 +276,26 @@ describe("updatePolarSubscriptionProduct", () => {
 			cancelAtPeriodEnd: false,
 		});
 
-		expect(polarMocks.Polar).toHaveBeenCalledWith({
+		expect(polarMocks.createPolar).toHaveBeenCalledWith({
 			accessToken: "polar-token",
-			server: "sandbox",
+			environment: "sandbox",
 		});
-		expect(polarMocks.subscriptionsUpdate).toHaveBeenCalledWith({
-			id: "sub-1",
-			subscriptionUpdate: {
-				productId: "starter-annual-product",
-				prorationBehavior: "invoice",
-			},
+		expect(polarMocks.subscriptionsUpdate).toHaveBeenCalledWith("sub-1", {
+			product_id: "starter-annual-product",
+			proration_behavior: "invoice",
 		});
 	});
 
 	it("uses the trusted organization when the Polar response has no metadata", async () => {
 		polarMocks.subscriptionsUpdate.mockResolvedValueOnce({
 			id: "sub-1",
-			productId: "starter-annual-product",
-			customerId: "customer-1",
-			checkoutId: "checkout-1",
+			product_id: "starter-annual-product",
+			customer_id: "customer-1",
+			checkout_id: "checkout-1",
 			status: "active",
-			currentPeriodStart: new Date("2026-05-01T00:00:00.000Z"),
-			currentPeriodEnd: new Date("2027-05-01T00:00:00.000Z"),
-			cancelAtPeriodEnd: false,
+			current_period_start: "2026-05-01T00:00:00.000Z",
+			current_period_end: "2027-05-01T00:00:00.000Z",
+			cancel_at_period_end: false,
 			metadata: {},
 		});
 
@@ -354,12 +331,11 @@ describe("updatePolarSubscriptionProduct", () => {
 
 	it("maps already canceled subscription failures", async () => {
 		polarMocks.subscriptionsUpdate.mockRejectedValueOnce(
-			new AlreadyCanceledSubscription(
+			new errors.SubscriptionsUpdate403Error(403,
 				{
 					error: "AlreadyCanceledSubscription",
 					detail: "subscription is canceled",
 				},
-				polarErrorHttpMeta(),
 			),
 		);
 
@@ -379,12 +355,11 @@ describe("updatePolarSubscriptionProduct", () => {
 
 	it("maps payment failures", async () => {
 		polarMocks.subscriptionsUpdate.mockRejectedValueOnce(
-			new PaymentFailed(
+			new errors.SubscriptionsUpdate402Error(402,
 				{
 					error: "PaymentFailed",
 					detail: "card declined",
 				},
-				polarErrorHttpMeta(),
 			),
 		);
 
@@ -404,12 +379,11 @@ describe("updatePolarSubscriptionProduct", () => {
 
 	it("maps locked subscription failures", async () => {
 		polarMocks.subscriptionsUpdate.mockRejectedValueOnce(
-			new SubscriptionLocked(
+			new errors.SubscriptionsUpdate409Error(409,
 				{
 					error: "SubscriptionLocked",
 					detail: "subscription is locked",
 				},
-				polarErrorHttpMeta(),
 			),
 		);
 
@@ -444,15 +418,3 @@ describe("updatePolarSubscriptionProduct", () => {
 		).rejects.toThrow("polar unavailable");
 	});
 });
-
-function polarErrorHttpMeta(): {
-	response: Response;
-	request: Request;
-	body: string;
-} {
-	return {
-		response: new Response(null, { status: 400 }),
-		request: new Request("https://api.polar.example/v1/subscriptions/sub-1"),
-		body: "",
-	};
-}

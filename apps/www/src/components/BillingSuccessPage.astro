@@ -13,7 +13,12 @@ const vaultsUrl = new URL("/vaults", apiUrl || Astro.url.origin).toString();
 ---
 
 <Layout title={t.meta.billingSuccessTitle} description={t.meta.billingSuccessDescription} locale={locale} noindex>
-  <div class="max-w-2xl mx-auto px-6 w-full flex-1 flex flex-col">
+  <billing-confirmation
+    class="max-w-2xl mx-auto px-6 w-full flex-1 flex flex-col"
+    data-api-url={apiUrl}
+    data-fallback-message={t.billing.fallback}
+    data-vaults-url={vaultsUrl}
+  >
     <main class="flex-1 flex flex-col items-center justify-center pb-32 text-center">
       <div id="spinner" class="animate-spin rounded-full h-8 w-8 border-2 border-zinc-600 border-t-zinc-200 mb-6" aria-hidden="true"></div>
       <h1 class="text-2xl text-zinc-200 tracking-tight mb-2">
@@ -32,58 +37,71 @@ const vaultsUrl = new URL("/vaults", apiUrl || Astro.url.origin).toString();
         </a>
       </div>
     </main>
-  </div>
+  </billing-confirmation>
 </Layout>
 
-<script define:vars={{ apiUrl, fallbackMessage: t.billing.fallback, vaultsUrl }}>
-  const message = document.getElementById("message");
-  const actions = document.getElementById("actions");
-  const spinner = document.getElementById("spinner");
+<script is:inline type="module">
+  class BillingConfirmation extends HTMLElement {
+    controller;
+    timer;
 
-  const organizationId = new URLSearchParams(location.search).get("organizationId");
-  const destination = new URL(vaultsUrl, location.origin); if (organizationId) destination.searchParams.set("organizationId", organizationId);
-  document.querySelector("#actions a").href = destination.toString();
-  let startedAt = Date.now();
-  let fallbackShown = false;
-  let stopped = false;
+    connectedCallback() {
+      // Each connection owns its request and timer, including story remounts.
+      this.disconnectedCallback();
+      const controller = new AbortController();
+      this.controller = controller;
+      const { signal } = controller;
+      const message = this.querySelector("#message");
+      const actions = this.querySelector("#actions");
+      const spinner = this.querySelector("#spinner");
+      const link = this.querySelector("#actions a");
+      const apiUrl = this.dataset.apiUrl || "";
+      const organizationId = new URLSearchParams(location.search).get("organizationId");
+      const destination = new URL(this.dataset.vaultsUrl, location.origin);
+      if (organizationId) destination.searchParams.set("organizationId", organizationId);
+      if (link) link.href = destination.toString();
+      const startedAt = Date.now();
+      let fallbackShown = false;
 
-  async function fetchStatus() {
-    const response = await fetch(`${apiUrl}/v1/billing/status${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ""}`, {
-      credentials: "include",
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) {
-      throw new Error("status failed");
+      const poll = async () => {
+        if (signal.aborted) return;
+        try {
+          const response = await fetch(`${apiUrl}/v1/billing/status${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ""}`, {
+            credentials: "include",
+            headers: { accept: "application/json" },
+            signal,
+          });
+          if (!response.ok) throw new Error("status failed");
+          const status = await response.json();
+          // A response can settle after the element has been removed.
+          if (signal.aborted) return;
+          if (status.active) {
+            window.location.href = destination.toString();
+            return;
+          }
+        } catch {
+          // Keep polling; the webhook may arrive shortly after the redirect.
+        }
+        if (signal.aborted) return;
+
+        if (!fallbackShown && Date.now() - startedAt > 12000) {
+          fallbackShown = true;
+          actions?.classList.remove("hidden");
+          spinner?.classList.add("hidden");
+          if (message) message.textContent = this.dataset.fallbackMessage || "";
+        }
+        this.timer = window.setTimeout(poll, 1500);
+      };
+      void poll();
     }
-    return await response.json();
+
+    disconnectedCallback() {
+      this.controller?.abort();
+      window.clearTimeout(this.timer);
+    }
   }
 
-  async function poll() {
-    if (stopped) {
-      return;
-    }
-
-    try {
-      const status = await fetchStatus();
-      if (status.active) {
-        stopped = true;
-        window.location.href = destination.toString();
-        return;
-      }
-    } catch {
-      // Keep polling; the webhook may arrive shortly after the redirect.
-    }
-
-    const elapsed = Date.now() - startedAt;
-    if (!fallbackShown && elapsed > 12000) {
-      fallbackShown = true;
-      if (actions) actions.classList.remove("hidden");
-      if (spinner) spinner.classList.add("hidden");
-      if (message) message.textContent = fallbackMessage;
-    }
-
-    window.setTimeout(poll, 1500);
+  if (!customElements.get("billing-confirmation")) {
+    customElements.define("billing-confirmation", BillingConfirmation);
   }
-
-  poll();
 </script>

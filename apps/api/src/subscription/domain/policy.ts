@@ -110,7 +110,7 @@ export const SUBSCRIPTION_PLAN_POLICIES = {
 		},
 		limits: {
 			syncedVaults: 3,
-			storageLimitBytes: 2 * BYTES_PER_GB,
+			storageLimitBytes: 5 * BYTES_PER_GB,
 			maxFileSizeBytes: 100 * BYTES_PER_MB,
 			versionHistoryRetentionDays: 365,
 		},

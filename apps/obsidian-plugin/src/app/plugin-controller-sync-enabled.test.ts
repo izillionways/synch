@@ -1,3 +1,6 @@
+import { SyncAccessClient } from "@synch/sync-client/remote";
+import { ApiRequestError } from "@synch/sync-client/http";
+import { readStoredRemoteVaultKeySecret } from "../adapters/remote-vault-device-storage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -50,6 +53,25 @@ describe("SynchPluginController sync enabled setting", () => {
     expect(stopAutoSyncAndMarkPaused).toHaveBeenCalledTimes(1);
   });
 
+  it("silently persists automatic sync off after a server pause and preserves the vault key", async () => {
+    const plugin = await createConnectedPlugin({ syncEnabled: true });
+    const controller = new SynchPluginController({ plugin, refreshUi: vi.fn() });
+    await controller.initialize();
+    const keyBefore = await readStoredRemoteVaultKeySecret(plugin);
+    const noticesBefore = getNotices().length;
+    const runtime = (controller as unknown as {
+      syncController: { syncEngine: { deps: { onSyncError(error: Error, phase: string): void } } };
+    }).syncController.syncEngine;
+    runtime.deps.onSyncError(new ApiRequestError(503, "sync_paused", "paused"), "auto_sync");
+    await vi.waitFor(() => expect(plugin.savedData?.[SYNCH_SETTINGS_KEY]).toMatchObject({ syncEnabled: false }));
+    expect(controller.isSyncEnabled()).toBe(false);
+    expect(await readStoredRemoteVaultKeySecret(plugin)).toEqual(keyBefore);
+    const ensureAutoSyncState = vi.spyOn(SyncController.prototype, "ensureAutoSyncState").mockResolvedValue();
+    await controller.ensureAutoSyncState();
+    expect(ensureAutoSyncState).not.toHaveBeenCalled();
+    expect(getNotices()).toHaveLength(noticesBefore);
+  });
+
   it("starts the existing auto sync flow when sync is enabled", async () => {
     const plugin = await createConnectedPlugin({
       syncEnabled: false,
@@ -69,13 +91,34 @@ describe("SynchPluginController sync enabled setting", () => {
     });
     await controller.initialize();
 
+    const issueToken = vi.spyOn(SyncAccessClient.prototype, "issueSyncToken");
     await controller.setSyncEnabled(true);
 
+    expect(issueToken).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787", "stored-token",
+      expect.objectContaining({ vaultId: "vault-1", resumeSync: true }),
+    );
     expect(ensureAutoSyncState).toHaveBeenCalledTimes(1);
     expect(refreshUi).toHaveBeenCalled();
     expect(plugin.savedData?.[SYNCH_SETTINGS_KEY]).toMatchObject({
       syncEnabled: true,
     });
+  });
+
+  it("keeps sync disabled and preserves the vault when server resume fails", async () => {
+    const plugin = await createConnectedPlugin({ syncEnabled: false });
+    mockOnlineReadinessRequests();
+    vi.spyOn(SyncController.prototype, "readStoredConnection").mockResolvedValue(storedConnection());
+    const ensure = vi.spyOn(SyncController.prototype, "ensureAutoSyncState").mockResolvedValue();
+    const controller = new SynchPluginController({ plugin, refreshUi: vi.fn() });
+    await controller.initialize();
+    const key = await readStoredRemoteVaultKeySecret(plugin);
+    vi.spyOn(SyncAccessClient.prototype, "issueSyncToken").mockRejectedValue(new ApiRequestError(503, "sync_paused", "repair required"));
+    await controller.setSyncEnabled(true);
+    expect(controller.isSyncEnabled()).toBe(false);
+    expect(ensure).not.toHaveBeenCalled();
+    expect(await readStoredRemoteVaultKeySecret(plugin)).toEqual(key);
+    expect(getNotices().length).toBeGreaterThan(0);
   });
 
   it("does not enable sync when the server requires a plugin update", async () => {

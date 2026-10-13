@@ -1,3 +1,4 @@
+import { ContextRequestCache } from "./context-request-cache";
 import { BillingClient } from "@synch/sync-client/billing";
 import { defaultHttpClient } from "../adapters/http";
 import { buildBillingWebPageUrl } from "./billing-web-url";
@@ -18,40 +19,36 @@ export interface SynchSubscriptionServiceDeps {
 
 export class SynchSubscriptionService {
   private readonly billingClient = new BillingClient(defaultHttpClient);
-  private contextKey = "";
-  private subscriptionStatusCheckPromise: Promise<void> | null = null;
-  private subscriptionStatusCheckedAt = 0;
   private subscriptionStatus: SynchSubscriptionStatus = {
     state: "idle",
   };
 
+  private readonly cache = new ContextRequestCache({
+    getContextKey: () => JSON.stringify([
+      this.deps.getApiBaseUrl(),
+      this.deps.getAuthSessionToken(),
+      this.deps.hasAuthenticatedSession(),
+      this.deps.getOrganizationId?.(),
+    ]),
+    intervalMs: SUBSCRIPTION_STATUS_CHECK_INTERVAL_MS,
+    onInvalidate: () => { this.subscriptionStatus = { state: "idle" }; },
+    onSettled: () => this.deps.refreshUi(),
+  });
+
   constructor(private readonly deps: SynchSubscriptionServiceDeps) {}
 
   getSubscriptionStatus(): SynchSubscriptionStatus {
-    this.checkContext();
+    this.cache.syncContext();
     return this.subscriptionStatus;
   }
 
   async ensureSubscriptionStatusCheck(): Promise<void> {
-    this.checkContext();
+    this.cache.syncContext();
     if (
       !this.deps.hasAuthenticatedSession() ||
       getServerDeployment(this.deps.getApiBaseUrl()) !== "official_cloud"
     ) {
       this.clearSubscriptionStatus();
-      return;
-    }
-
-    if (this.subscriptionStatusCheckPromise) {
-      await this.subscriptionStatusCheckPromise;
-      return;
-    }
-
-    if (
-      this.subscriptionStatus.state !== "idle" &&
-      Date.now() - this.subscriptionStatusCheckedAt <
-        SUBSCRIPTION_STATUS_CHECK_INTERVAL_MS
-    ) {
       return;
     }
 
@@ -59,7 +56,7 @@ export class SynchSubscriptionService {
   }
 
   async retrySubscriptionStatusCheck(): Promise<void> {
-    this.checkContext();
+    this.cache.syncContext();
     if (
       !this.deps.hasAuthenticatedSession() ||
       getServerDeployment(this.deps.getApiBaseUrl()) !== "official_cloud"
@@ -68,13 +65,11 @@ export class SynchSubscriptionService {
       return;
     }
 
-    await this.checkSubscriptionStatus();
+    await this.checkSubscriptionStatus(true);
   }
 
   clearSubscriptionStatus(): void {
-    this.subscriptionStatus = { state: "idle" };
-    this.subscriptionStatusCheckedAt = 0;
-    this.subscriptionStatusCheckPromise = null;
+    this.cache.invalidate();
   }
 
   openBillingManagementPage(): void {
@@ -98,59 +93,32 @@ export class SynchSubscriptionService {
     openExternalUrl(scopedUrl.toString());
   }
 
-  private checkContext(): void {
-    const next = JSON.stringify([
-      this.deps.getApiBaseUrl(),
-      this.deps.getAuthSessionToken(),
-      this.deps.getOrganizationId?.(),
-    ]);
-    if (next !== this.contextKey) {
-      this.contextKey = next;
-      this.clearSubscriptionStatus();
-    }
-  }
-
-  private async checkSubscriptionStatus(): Promise<void> {
-    if (this.subscriptionStatusCheckPromise) {
-      await this.subscriptionStatusCheckPromise;
-      return;
-    }
-
+  private async checkSubscriptionStatus(force = false): Promise<void> {
     const sessionToken = this.deps.getAuthSessionToken().trim();
     if (!sessionToken) {
       this.clearSubscriptionStatus();
       return;
     }
 
-    const contextKey = this.contextKey;
-    this.subscriptionStatus = { state: "checking" };
-    this.subscriptionStatusCheckPromise = this.billingClient
-      .readBillingStatus(
-        this.deps.getApiBaseUrl(),
-        sessionToken,
-        this.deps.getOrganizationId?.(),
-      )
-      .then((status) => {
-        if (contextKey !== this.contextKey) return;
-        this.subscriptionStatus = {
-          state: "loaded",
-          ...status,
-        };
-      })
-      .catch((error) => {
-        if (contextKey !== this.contextKey) return;
+    await this.cache.run(
+      () => {
+        this.subscriptionStatus = { state: "checking" };
+        return this.billingClient.readBillingStatus(
+          this.deps.getApiBaseUrl(),
+          sessionToken,
+          this.deps.getOrganizationId?.(),
+        );
+      },
+      (status) => {
+        this.subscriptionStatus = { state: "loaded", ...status };
+      },
+      (error) => {
         this.subscriptionStatus = {
           state: "failed",
           error: error instanceof Error ? error.message : String(error),
         };
-      })
-      .finally(() => {
-        if (contextKey !== this.contextKey) return;
-        this.subscriptionStatusCheckedAt = Date.now();
-        this.subscriptionStatusCheckPromise = null;
-        this.deps.refreshUi();
-      });
-
-    await this.subscriptionStatusCheckPromise;
+      },
+      force,
+    );
   }
 }

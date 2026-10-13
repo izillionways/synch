@@ -34,9 +34,11 @@ jobs:
 
       - run: pnpm check:api-lockfile
 
-      - run: pnpm -C apps/api check:public
+      - run: pnpm -C apps/api check:vault-crypto
 
       - run: pnpm -C apps/api typecheck
+
+      - run: pnpm -C apps/api test:web
 
       - run: pnpm -C apps/api test:unit
 

@@ -30,7 +30,6 @@ type ValidatedManifestItem = PullEntryStateManifestItem & (
 interface PullManifestPlannerDeps {
   getRemoteVaultKey: () => Uint8Array;
   vaultAdapter: ConflictFileWriter;
-  onConflict?: (event: PullConflictEvent) => void;
   onRollbackDetected?: (event: PullRollbackEvent) => void;
   shouldUseLatestRemoteVersion?: (path: string) => boolean;
   shouldApplyRemotePath?: (path: string, deleted: boolean) => boolean;
@@ -43,7 +42,7 @@ export class PullManifestPlanner {
   async planManifest(
     store: PullManifestStore,
     manifest: PullEntryStateManifestItem[],
-    options: { deferExternalPathOwners: boolean },
+    options: { deferExternalPathOwners: boolean; appliedEntryIds?: ReadonlySet<string> },
   ): Promise<{
     plans: PlannedEntryState[];
     deferred: PullEntryStateManifestItem[];
@@ -69,7 +68,7 @@ export class PullManifestPlanner {
         });
         continue;
       }
-      skipped.push(item);
+      if (!options.appliedEntryIds?.has(item.state.entryId)) skipped.push(item);
     }
     // Rejected entries retain their local paths. They must not count as moving
     // owners or reserve destinations while planning the accepted entries.
@@ -77,6 +76,7 @@ export class PullManifestPlanner {
     const activeManifest: ValidatedManifestItem[] = [];
     const superseded: PullEntryStateManifestItem[] = [];
     for (const item of validatedManifest) {
+      if (options.appliedEntryIds?.has(item.state.entryId)) continue;
       const winnerEntryId = latestManagedEntryByPath.get(item.metadata.path);
       if (winnerEntryId && winnerEntryId !== item.state.entryId) {
         const existing = await store.getEntryById(item.state.entryId);
@@ -96,7 +96,10 @@ export class PullManifestPlanner {
         superseded.push(item);
         continue;
       }
-      activeManifest.push(item);
+      // Recovery may include an already-applied owner only to choose the latest
+      // entry for a path. Replaying it could discard that owner's pending edits.
+      // It can still be superseded by a genuinely newer incoming entry above.
+      if (!item.contextOnly) activeManifest.push(item);
     }
 
     const deferredEntryIds = new Set<string>();
@@ -400,7 +403,6 @@ export class PullManifestPlanner {
       originalPath: path,
       conflictPath,
     };
-    this.deps.onConflict?.(event);
     return event;
   }
 }

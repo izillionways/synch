@@ -68,9 +68,11 @@ jobs:
 
       - run: pnpm check:api-lockfile
 
-      - run: pnpm -C apps/api check:public
+      - run: pnpm -C apps/api check:vault-crypto
 
       - run: pnpm -C apps/api typecheck
+
+      - run: pnpm -C apps/api test:web
 
       - run: pnpm -C apps/api test:unit
 
@@ -96,6 +98,7 @@ jobs:
             --exclude=node_modules \
             --exclude=.wrangler \
             --exclude=dist \
+            --exclude=public \
             -C apps/api -cf - . | tar -C "$template_dir" -xf -
           pnpm --dir "$template_dir" install --frozen-lockfile
           pnpm --dir "$template_dir" run build:cloudflare:community

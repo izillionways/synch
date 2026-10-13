@@ -1,249 +1,157 @@
 ---
 title: "Remotely Save für Obsidian: Einrichtung, Vor- und Nachteile und Alternativen"
-description: "Ein praktischer Leitfaden zu Remotely Save für Obsidian: unterstützte Speicheranbieter, Verschlüsselung, Konflikthandling, mobile Synchronisierung und wann Synch die bessere Wahl ist."
+description: "Remotely Save mit Dropbox einrichten: Anleitung mit Screenshots für Anmeldung, Verschlüsselung und ein zweites Gerät. Dazu Lösungen für fehlende Notizen und ein Vergleich der kostenlosen und PRO-Funktionen."
 pubDate: 2026-05-11
+updatedDate: 2026-10-03
 ---
 
-Wenn Sie Obsidian synchronisieren möchten, ohne für den offiziellen Dienst zu bezahlen, ist **Remotely Save** eines der ersten Community-Plugins, auf die Sie stoßen.
+**Mit Remotely Save synchronisierst du deinen Obsidian-Vault über einen Cloudspeicher deiner Wahl.** Du installierst das Plugin auf jedem Gerät und verbindest es mit demselben Speicherkonto und demselben entfernten Vault. Bevor du auf einem anderen Gerät weiterschreibst, synchronisierst du nacheinander beide Geräte.
 
-Das ist kein Zufall. Statt Sie auf einen Synchronisierungsanbieter festzulegen, verbindet Remotely Save ein Obsidian-Vault mit einem Speicher, den Sie selbst wählen: S3-kompatibler Speicher, WebDAV, Dropbox, OneDrive, Google Drive, Box, pCloud, Koofr, Azure Blob Storage und weitere Backends, je nach Funktionsstufe.
+Diese Anleitung führt dich durch eine neue Einrichtung mit Dropbox. Anschließend verbindest du dein zweites Gerät und prüfst, ob Änderungen in beide Richtungen ankommen. Falls du Remotely Save schon eingerichtet hast, findest du weiter unten eine Tabelle zur Fehlersuche.
 
-Genau diese Flexibilität ist der Punkt.
+Remotely Save ist ein Community-Plugin und gehört nicht zum offiziellen Dienst Obsidian Sync. Um Speicherplatz, Zugriffsrechte und Wiederherstellung kümmerst du dich selbst.
 
-Und genau das ist auch der Kompromiss.
+## Welche Speicheranbieter lassen sich kostenlos nutzen?
 
-Remotely Save kann hervorragend passen, wenn Sie bereits wissen, wo Ihre Vault-Daten liegen sollen, und bereit sind, Synchronisierungseinstellungen selbst zu konfigurieren. Wenn Sie eigentlich einen einfachen, auf Obsidian ausgerichteten Synchronisierungsdienst wollen, bevorzugen Sie möglicherweise irgendwann ein anderes Werkzeug.
+Einige Anbindungen sind kostenlos, andere gehören zu den kostenpflichtigen PRO-Funktionen. Die Kosten des Speicheranbieters kommen gegebenenfalls hinzu: Eine kostenlose Anbindung bedeutet nicht automatisch kostenlosen Speicher oder kostenlose API-Aufrufe.
 
-Dieser Leitfaden erklärt, wie Remotely Save funktioniert, wann es eine gute Wahl ist, worauf Sie achten sollten und wann eine Alternative wie Synch einfacher sein kann.
-
-![Ein Obsidian-Vault, das mit mehreren selbst gewählten Speicher-Backends verbunden ist](./remotely-save-storage-options.webp)
-
-## Was ist Remotely Save?
-
-[Remotely Save](https://github.com/remotely-save/remotely-save) ist ein inoffizielles Community-Plugin für Obsidian, mit dem sich Notizen zwischen einem lokalen Vault und einem entfernten Cloud-Speicher synchronisieren lassen.
-
-Es ist nicht der offizielle Obsidian-Sync-Dienst. Es läuft in Obsidian als Plugin und nutzt den von Ihnen gewählten Speicheranbieter als entfernten Synchronisierungsort.
-
-Das Grundmodell sieht so aus:
-
-```txt
-Obsidian vault on device A
-        |
-Remotely Save plugin
-        |
-your chosen remote storage
-        |
-Remotely Save plugin
-        |
-Obsidian vault on device B
-```
-
-Der entfernte Speicher vermittelt zwischen den Geräten. Je nach Einrichtung kann das ein S3-kompatibler Bucket, ein WebDAV-Server, Dropbox, OneDrive, Google Drive oder ein anderer unterstützter Dienst sein.
-
-## Warum Menschen Remotely Save nutzen
-
-Der wichtigste Grund für Remotely Save ist Kontrolle.
-
-Beim offiziellen Obsidian-Sync-Dienst ist der Synchronisierungsdienst vorgegeben. Mit Remotely Save bringen Sie Ihren eigenen Speicher mit. Das ist attraktiv, wenn Sie bereits einen Speicheranbieter nutzen, Daten in einem bestimmten Cloud-Konto behalten wollen oder eine Lösung bevorzugen, die nicht an ein einziges gehostetes Synchronisierungsprodukt gebunden ist.
-
-Remotely Save ist besonders interessant, wenn:
-
-- Sie Obsidian über einen Speicher synchronisieren möchten, dem Sie bereits vertrauen
-- Sie S3-kompatiblen Speicher wie Cloudflare R2, Backblaze B2, MinIO oder Amazon S3 nutzen möchten
-- Sie WebDAV über einen selbst gehosteten Server, Synology, Nextcloud oder einen anderen Anbieter nutzen möchten
-- Sie einen Workflow über ein Obsidian-Plugin bevorzugen statt eines separaten Desktop-Synchronisierungstools
-- Sie Mobilgeräte und Desktop über dasselbe Plugin synchronisieren möchten
-- Sie bereit sind, Einstellungen sorgfältig zu lesen, bevor Sie einem Vault die Synchronisierung anvertrauen
-
-Für technisch versierte Nutzer kann diese Flexibilität wichtiger sein als die einfachstmögliche Einrichtung.
-
-## Unterstützte Speicheranbieter
-
-Remotely Save unterstützt mehrere Speicher-Backends. Die genaue Auswahl hängt von Plugin-Version und Funktionsstufe ab. Das Projekt nennt unter anderem:
-
-| Speicher-Backend | Warum Nutzer es wählen | Wichtigster Kompromiss |
+| Speicheranbieter | Plugin-Funktion | Darauf solltest du achten |
 | --- | --- | --- |
-| S3-kompatibler Speicher | Flexibel, günstig, funktioniert mit Anbietern wie R2, B2, MinIO und S3 | Erfordert Bucket, Schlüssel, Endpoint und Kostenbewusstsein |
-| WebDAV | Funktioniert mit vielen selbst gehosteten Setups und NAS-Systemen | Die Qualität hängt stark vom WebDAV-Server ab |
-| Dropbox | Vertrauter gehosteter Speicher | Sie verlassen sich auf einen allgemeinen Cloud-Drive-Anbieter |
-| OneDrive | Praktisch für persönliche Microsoft-Konten | Die kostenlose Version nutzt den App Folder; voller Zugriff auf persönliches OneDrive ist ein PRO-Merkmal, und Geschäftskonten sind nicht das dokumentierte Ziel |
-| Google Drive | Vertrauter Speicher für viele Nutzer | Die Google-Drive-Unterstützung ist ein PRO-Connect-Merkmal |
-| Box, pCloud, Koofr, Azure Blob und andere | Nützlich, wenn Sie diese Dienste bereits nutzen | Die genannten Anbieter sind PRO-Connect-Merkmale |
+| Dropbox | Kostenlos | Freier Speicher und das Konto, das du auf allen Geräten verwendest |
+| S3-kompatibler Speicher | Kostenlos | Bucket, Endpunkt, Zugangsschlüssel sowie Speicher- und API-Kosten |
+| WebDAV | Kostenlos | Serveradresse, Anmeldung und Kompatibilität |
+| Persönliches OneDrive, App Folder | Kostenlos | Nutzt den App-Ordner statt beliebiger vorhandener Ordner |
+| Persönliches OneDrive, Full | PRO | Für den Zugriff außerhalb des App-Ordners |
+| Google Drive | PRO | Die entsprechende Funktion muss aktiviert und autorisiert sein |
+| Box, pCloud, Yandex Disk, Koofr, Azure Blob | PRO | Verfügbarkeit der Anbindung und Grenzen des Speicheranbieters |
 
-Das ist der wesentliche Unterschied zwischen Remotely Save und den meisten Obsidian-Synchronisierungsalternativen. Es ist nicht nur ein Synchronisierungsdienst. Es ist eine Brücke zwischen Obsidian und vielen möglichen entfernten Speichersystemen.
+Prüfe vor der Einrichtung die [Liste unterstützter Dienste](https://github.com/remotely-save/remotely-save/blob/master/docs/services_connectable_or_not.md). Weitere Möglichkeiten findest du im [Vergleich kostenloser Sync-Lösungen für Obsidian](/de/blog/free-obsidian-sync/).
 
-Diese Brücke ist mächtig, aber Sie müssen das Speichersystem auf der anderen Seite trotzdem verstehen.
+## Remotely Save mit Dropbox einrichten
 
-## Typischer Einrichtungsablauf
+Die folgenden Schritte gelten für eine **neue Synchronisierung**. Hast du denselben Vault bereits auf zwei Geräten unabhängig bearbeitet, sichere zuerst beide Fassungen. Lass nicht den ersten Sync darüber entscheiden, welche Inhalte erhalten bleiben.
 
-Die genaue Einrichtung hängt vom Anbieter ab, aber die meisten Remotely-Save-Konfigurationen folgen demselben Muster:
+### 1. Vault sichern und eine Testnotiz anlegen
 
-1. Sichern Sie Ihr Obsidian-Vault außerhalb des Synchronisierungsziels.
-2. Installieren Sie Remotely Save über den Community-Plugin-Browser von Obsidian.
-3. Wählen Sie in den Plugin-Einstellungen einen entfernten Dienst.
-4. Geben Sie Zugangsdaten, Endpoint, Bucket, Ordner oder Autorisierungsdetails des Anbieters ein.
-5. Entscheiden Sie, ob Sie Verschlüsselung aktivieren.
-6. Entscheiden Sie, ob große Dateien übersprungen oder Pfade ausgeschlossen werden sollen.
-7. Führen Sie eine erste Synchronisierung aus.
-8. Installieren und konfigurieren Sie das Plugin auf Ihren anderen Geräten.
-9. Prüfen Sie, dass dasselbe Vault korrekt erscheint, bevor Sie von mehreren Orten aus bearbeiten.
+Beginne auf dem Gerät mit dem vollständigen Vault. Kopiere ihn an einen Ort außerhalb des zu synchronisierenden Ordners und prüfe, ob sich die Sicherung öffnen lässt.
 
-Der erste Schritt ist der wichtigste. Jedes Synchronisierungswerkzeug kann einen Fehler schnell verbreiten. Bevor Sie ein echtes Vault mit einem neuen Synchronisierungssystem verbinden, legen Sie eine separate Kopie an einem Ort an, den das Plugin nicht erreichen kann.
+Verwende für den aktiven Vault nur eine Sync-Lösung. Lege ihn also nicht zusätzlich in einen Ordner, den die Dropbox-Desktop-App synchronisiert. Remotely Save stellt selbst die Verbindung zu Dropbox her.
 
-## Verschlüsselung in Remotely Save
+Für den ersten Versuch eignet sich ein kleiner Test-Vault, etwa `Notes-Sync-Test`. Verwende einen Namen, der in deinem Dropbox-Konto noch keinem anderen entfernten Vault zugeordnet ist. Lege darin eine Notiz „Sync-Test“ an und schreibe einen Satz hinein, den du später auf dem Handy wiedererkennst.
 
-Remotely Save unterstützt passwortbasierte Ende-zu-Ende-Verschlüsselung. Wenn Sie ein Verschlüsselungskennwort festlegen, werden Dateien verschlüsselt, bevor sie an den entfernten Speicheranbieter gesendet werden.
+### 2. Plugin installieren und aktivieren
 
-Das ist wichtig, wenn Sie private Notizen in einem allgemeinen Cloud-Dienst oder Object-Storage-Bucket ablegen.
+Öffne in Obsidian die **Einstellungen → Community-Plugins**. Erlaube bei Bedarf die Nutzung von Community-Plugins und suche in der Plugin-Liste nach **Remotely Save**. Installiere und aktiviere es. Öffne zunächst die Plugin-Einstellungen, bevor du einen Sync startest.
 
-Einige Details sollten Sie trotzdem verstehen:
+Die folgenden Screenshots zeigen eine ältere Obsidian-Version. Beschriftungen und Anordnung können in deiner Version anders aussehen.
 
-- Die Verschlüsselung muss auf jedem Gerät korrekt konfiguriert sein.
-- Wenn Sie das Verschlüsselungskennwort vergessen, können Sie die synchronisierten Daten möglicherweise nicht aus dem entfernten Speicher wiederherstellen.
-- Manche Metadaten können sich anders verhalten als bei einem eigens dafür gebauten verschlüsselten Synchronisierungsdienst.
-- Die Plugin-Einstellungsdatei kann sensible Informationen enthalten und sollte weder geteilt noch in Git übernommen werden.
+### 3. Dropbox autorisieren
 
-Verschlüsselung ist nicht nur ein Häkchen. Sie verändert das Wiederherstellungsmodell. Bevor Sie sich darauf verlassen, testen Sie mit einem kleinen Vault und stellen Sie sicher, dass ein anderes Gerät die Daten korrekt entschlüsseln kann.
+Wähle in den Remotely-Save-Einstellungen unter **Choose service** den Eintrag **Dropbox** und klicke auf **Auth**. Öffne den angezeigten Link im Browser. Kontrolliere, ob du im gewünschten Dropbox-Konto angemeldet bist, und erlaube die Verbindung. Lass den Browser anschließend zu Obsidian zurückkehren und prüfe dort den Verbindungsstatus.
 
-## Konflikthandling
+![Remotely-Save-Einstellungen mit ausgewähltem Dropbox-Dienst und markierter Auth-Schaltfläche](./dropbox-choose-service.webp)
 
-Beim Konflikthandling fühlen sich Obsidian-Synchronisierungswerkzeuge sehr anders an als gewöhnliche Datei-Upload-Tools.
+*Wähle Dropbox und klicke anschließend auf Auth.*
 
-Ein Obsidian-Vault ändert sich auf viele kleine Weisen. Eine Markdown-Notiz kann sich auf dem Laptop ändern. Eine Plugin-Einstellung kann sich auf dem Telefon ändern. Eine Canvas-Datei oder ein Anhang wird möglicherweise noch hochgeladen, während ein anderes Gerät schon zu bearbeiten beginnt. Wenn zwei Geräte zusammenhängende Dateien ändern, bevor sie den jeweils neuesten Stand gesehen haben, muss das Synchronisierungswerkzeug entscheiden, was zu tun ist.
+Laut Dokumentation liegen die Dateien in Dropbox unter `/Apps/remotely-save`. In der Standardkonfiguration bestimmt der Vault-Name das Ziel. Verwende deshalb auf den anderen Geräten denselben Namen. Einzelheiten zum Zugriff stehen in den [Hinweisen zur Dropbox-Anbindung](https://github.com/remotely-save/remotely-save#dropbox).
 
-Remotely Save enthält Konflikterkennung und -behandlung; fortgeschritteneres, intelligenteres Konfliktverhalten gehört zum PRO-Merge-Funktionsumfang. Das kann helfen, ersetzt aber nicht gute Synchronisierungsgewohnheiten.
+![Erfolgreiche Dropbox-Verbindung mit Verbindungsstatus und Revoke-Auth-Schaltfläche](./dropbox-connected.webp)
 
-Sie sollten weiterhin vermeiden:
+*In dieser Oberfläche wird aus Auth nach der Anmeldung Revoke Auth. Das Konto ist verbunden; starte nun einen Sync, um deine Notizen zu übertragen.*
 
-- dieselbe Notiz auf zwei Geräten stark zu bearbeiten, bevor synchronisiert wird
-- mehrere Synchronisierungssysteme auf demselben aktiven Vault laufen zu lassen
-- ein Cloud-Backend als vollständiges Backup zu betrachten
-- Plugin-Einstellungen zu synchronisieren, ohne Unterschiede zwischen Mobilgerät und Desktop zu verstehen
-- Konfliktkopien als harmloses Rauschen zu behandeln
+### 4. Verschlüsselung vor dem ersten Upload einstellen
 
-Wenn ein Vault wichtig ist, behalten Sie eine unabhängige Sicherung. Synchronisierung hält Geräte konsistent. Ein Backup gibt Ihnen einen Wiederherstellungspunkt, wenn Konsistenz die falsche Änderung verbreitet.
+Wenn du Ende-zu-Ende-Verschlüsselung nutzen möchtest, richte sie ein, bevor du den Vault hochlädst. Speichere das Passwort in einem Passwortmanager und notiere das gewählte Verschlüsselungsformat. Auf allen Geräten müssen Format und Passwort übereinstimmen.
 
-![Zwei Geräte bearbeiten dasselbe Obsidian-Vault mit einer dezenten Warnung vor einem Synchronisierungskonflikt](./sync-conflict-risk.webp)
+Das Projekt beschreibt die Formate [Rclone Crypt und OpenSSL](https://github.com/remotely-save/remotely-save/blob/master/docs/encryption/README.md). Die Verschlüsselung ist optional und wird durch die Verbindung mit dem Speicherkonto nicht automatisch aktiviert. Bei Dropbox bleibt außerdem der Vault-Name sichtbar.
 
-## Mobile Synchronisierung
+Ändere bei einem bereits verwendeten entfernten Vault nicht versuchsweise Passwort oder Format, um einen Fehler zu beheben. Sichere eine lesbare lokale Kopie und prüfe vor einer Umstellung die Verschlüsselungsdokumentation.
 
-Remotely Save unterstützt Obsidian Mobile, und das ist einer der Gründe für seine Beliebtheit.
+### 5. Den ersten Sync manuell starten
 
-Mobile Unterstützung ist wichtig, weil viele generische Synchronisierungswerkzeuge auf Telefonen und Tablets deutlich schwächer sind als auf dem Desktop. Android und iOS beschränken Hintergrundaktivität, Dateizugriff und lang laufende Aufgaben. Ein Plugin, das in Obsidian läuft, kann einfacher zu nutzen sein als eine separate Dateisynchronisierungs-App.
+Klicke in Obsidian auf das Sync-Symbol von Remotely Save in der Seitenleiste oder führe den Sync-Befehl über die Befehlspalette aus. Lass Obsidian geöffnet, bis der Vorgang abgeschlossen ist. Behebe gemeldete Fehler, bevor du das zweite Gerät hinzufügst.
 
-Trotzdem hat die mobile Synchronisierung praktische Grenzen:
+![Markiertes Sync-Symbol von Remotely Save und Fortschrittsmeldungen in Obsidian](./dropbox-run-sync.webp)
 
-- Die Synchronisierung läuft möglicherweise nur zuverlässig, während Obsidian geöffnet ist.
-- Große Dateien können auf Mobilgeräten langsam oder problematisch sein.
-- OAuth- und Anmeldeabläufe der Anbieter können je nach Plattform unterschiedlich sein.
-- Wechselnde mobile Netzwerke können lange Synchronisierungsvorgänge unterbrechen.
-- Die Plugin-Einstellungen müssen geräteübergreifend übereinstimmen.
+*Klicke auf das markierte Sync-Symbol und warte auf den Abschluss, bevor du zum nächsten Gerät wechselst.*
 
-Für ein kleines, markdownzentriertes Vault kann das ausreichen. Bei einem Vault mit vielen Anhängen, großen PDFs, aufgenommenem Audio oder häufigen Bearbeitungen über mehrere Geräte hinweg sollten Sie sorgfältig testen, bevor Sie es als produktive Infrastruktur behandeln.
+Lass die automatische Synchronisierung während des Tests ausgeschaltet. So kannst du jeden Durchlauf einzeln überprüfen. Kontrolliere auch Größenlimits und ausgeschlossene Pfade: Ein abgeschlossener Sync bedeutet nicht, dass ausgeschlossene Anhänge übertragen wurden.
 
-## Remotely Save im Vergleich zu Obsidian Sync
+### 6. Das zweite Gerät verbinden
 
-Remotely Save und Obsidian Sync lösen überlappende Probleme, geben aber unterschiedliche Versprechen.
+Auf dem Handy oder dem zweiten Computer:
 
-| Option | Am besten für | Stärke | Kompromiss |
-| --- | --- | --- | --- |
-| Remotely Save | Nutzer, die eigenen Speicher mitbringen möchten | Flexible Anbieterwahl | Mehr Einrichtung und Verantwortung für das Backend |
-| Obsidian Sync | Nutzer, die den offiziellen, integrierten Dienst wollen | Ausgereifte, Obsidian-eigene Erfahrung | Kostenpflichtiges Abo und proprietärer gehosteter Dienst |
+1. Erstelle einen leeren lokalen Vault mit **demselben Namen**. Auf iPhone oder iPad bleibt die Option **Store in iCloud** für diesen Vault ausgeschaltet.
+2. Installiere und aktiviere darin Remotely Save.
+3. Wähle Dropbox und autorisiere dasselbe Konto.
+4. Übernimm gegebenenfalls Verschlüsselungsformat und Passwort vom ersten Gerät. Hast du einen eigenen entfernten Speicherort festgelegt, muss auch dieser übereinstimmen.
+5. Starte einen manuellen Sync und lass die App bis zum Abschluss geöffnet.
+6. Öffne „Sync-Test“ und prüfe, ob der Satz vom ersten Gerät angekommen ist.
 
-Wenn Sie möglichst wenig Reibung wollen, ist Obsidian Sync die einfachere Empfehlung. Es stammt vom Obsidian-Team und ist direkt in die App integriert.
+Der leere Vault verhindert, dass du gleich zu Beginn zwei unabhängig bearbeitete Fassungen zusammenführst. Die Sicherung vom ersten Gerät solltest du trotzdem behalten.
 
-Wenn Ihnen wichtiger ist, den Speicheranbieter selbst zu wählen, ist Remotely Save flexibler.
+### 7. Auch die Gegenrichtung testen
 
-## Remotely Save im Vergleich zu Syncthing
+Ergänze auf dem zweiten Gerät einen Satz in „Sync-Test“ und synchronisiere. Starte danach den Sync auf dem ersten Gerät und prüfe, ob die Ergänzung erscheint. Wenn du häufig Anhänge verwendest, teste zusätzlich eine kleine Datei.
 
-Syncthing ist eine weitere beliebte kostenlose Option, um Obsidian-Vaults zu synchronisieren. Es ist Open Source und Peer-to-Peer: Ihre Geräte können direkt synchronisieren, ohne zentralen Cloud-Speicheranbieter.
+Erst wenn das funktioniert, solltest du die automatische Synchronisierung einschalten und den Vault im Alltag auf beiden Geräten verwenden. Beim Wechsel gilt: zuerst das bisherige Gerät synchronisieren, dann das nächste, anschließend weiterschreiben.
 
-Das ist ein starkes Modell für Desktop-zu-Desktop-Setups.
+## Was du auf iPhone und Android beachten solltest
 
-Der Kompromiss ist die Verfügbarkeit. Geräte müssen in der Regel zur richtigen Zeit online sein. Die mobile Einrichtung kann außerdem umständlicher sein, besonders wenn Sie eine Lösung wollen, die sich in Obsidian natürlich anfühlt.
+Remotely Save unterstützt Obsidian auf Mobilgeräten. Plane trotzdem damit, **bei geöffneter App zu synchronisieren**. Ein eingestelltes Zeitintervall garantiert nicht, dass das Plugin weiterläuft, nachdem das Betriebssystem die App angehalten hat.
 
-Remotely Save nutzt entfernten Speicher als Vermittler. Syncthing nutzt die Synchronisierung von Gerät zu Gerät. Was besser ist, hängt davon ab, ob Sie ein Cloud-gestütztes Setup oder ein Peer-to-Peer-Setup bevorzugen.
+Lass beim ersten Download auch für Anhänge genügend Zeit. Wird der Vorgang unterbrochen, öffne Obsidian erneut, prüfe die Fehlermeldung und kontrolliere die Dateien, bevor du sie bearbeitest.
 
-## Remotely Save im Vergleich zu Self-hosted LiveSync
+Die [dokumentierten Einschränkungen](https://github.com/remotely-save/remotely-save#limitations) nennen Leistungsprobleme auf Mobilgeräten bei großen Dateien, darunter Dateien ab 50 MB. Kommen Notizen an, aber PDFs oder Aufnahmen fehlen, prüfe die Einstellung zum Überspringen großer Dateien. Andere Wege beschreibt unser [Leitfaden zur Synchronisierung zwischen iPhone und Android](/de/blog/obsidian-iphone-android-sync/).
 
-Self-hosted LiveSync ist ein leistungsfähiges Obsidian-Synchronisierungs-Plugin für Nutzer, die ein fortgeschritteneres, selbst gehostetes Synchronisierungssystem wollen. Es kann gut zu technisch versierten Nutzern passen, die Backend-Infrastruktur betreiben und pflegen können.
+## Remotely Save synchronisiert nicht: Wo anfangen?
 
-Im Vergleich zu Remotely Save ist Self-hosted LiveSync festgelegter in der Synchronisierungsarchitektur. Remotely Save ist breiter bei der Wahl des Speicheranbieters. LiveSync kann leistungsfähiger sein, wenn Sie genau dieses Modell wollen und bereit sind, es korrekt zu betreiben.
+Nimm eine kleine Testnotiz und starte auf jedem Gerät nacheinander einen manuellen Sync. Notiere das betroffene Gerät und die genaue Fehlermeldung. So lässt sich eingrenzen, ob der Upload, der Download oder die Auswahl der Dateien das Problem ist.
 
-Für nicht technische Nutzer können sich beide nach mehr Infrastruktur anfühlen, als sie erwartet haben.
+| Problem | Prüfen | Nächster Schritt |
+| --- | --- | --- |
+| Autorisierung wird nicht abgeschlossen | Browserkonto und Rückkehr zu Obsidian | Anmeldung erneut durchführen und verbundenen Status kontrollieren |
+| Sync endet, aber das andere Gerät bleibt leer | Konto, Vault-Name, eigener Zielpfad | Einstellungen vergleichen und erfolgreichen Upload auf Gerät 1 prüfen |
+| Verschlüsselte Dateien lassen sich nicht lesen | Passwort und Format | Lesbare Kopie sichern, dann ursprüngliche Einstellungen abgleichen |
+| Notizen kommen an, Anhänge fehlen | Größenlimits und ausgeschlossene Pfade | Betroffene Dateien mit den Regeln und Fehlermeldungen abgleichen |
+| Handy aktualisiert erst beim Öffnen der App | Unterbrechung der App und Sync-Zeitpunkt | Vor und nach dem Bearbeiten bei geöffneter App manuell synchronisieren |
+| WebDAV- oder S3-Verbindung schlägt fehl | Adresse, Zugangsdaten, Rechte und Fehlermeldung | Anleitung für den konkreten Anbieter durchgehen |
+| Doppelte Notizen oder fehlende Änderungen | Gleichzeitige Bearbeitung und andere Sync-Tools | Bearbeitung auf anderen Geräten stoppen und alle Fassungen sichern |
 
-## Wann Remotely Save eine gute Wahl ist
+Lösche nicht auf Verdacht den entfernten Vault oder die einzige vollständige lokale Kopie. Auch eine Neuinstallation des Plugins ist kein sinnvoller erster Versuch. Fehlen Dateien, sichere zuerst die noch vorhandenen Kopien und prüfe Backups sowie verfügbare Versionsstände. Unser [Artikel zu Sync-Konflikten und verschwundenen Notizen](/de/blog/obsidian-sync-conflicts/) erläutert häufige Ursachen und Hinweise zur Wiederherstellung.
 
-Remotely Save lohnt sich, wenn Sie den Gedanken mögen, Ihren eigenen Synchronisierungs-Stack zu konfigurieren.
+### Manuell hochgeladene Google-Drive-Dateien fehlen
 
-Es passt gut, wenn:
+Die Google-Drive-Anbindung ist eine **PRO-Funktion**. Aktiviere sie und führe anschließend die Autorisierung im Plugin durch.
 
-- Sie bereits einen bevorzugten Speicheranbieter haben
-- Sie S3, R2, B2, MinIO, WebDAV oder ein anderes bestimmtes Backend wollen
-- Sie Zugangsdaten und Plugin-Einstellungen verwalten können
-- Sie verstehen, dass Synchronisierung nicht dasselbe ist wie ein Backup
-- Sie bereit sind, zuerst mit einer Kopie Ihres Vaults zu testen
-- Sie ein Community-Plugin statt eines eigenen gehosteten Dienstes wollen
+Laut [Google-Drive-Anleitung](https://github.com/remotely-save/remotely-save/blob/master/docs/remote_services/googledrive/README.md) kann das Plugin auf Dateien und Ordner zugreifen, die es selbst erstellt hat. Einen Vault über die Drive-Webseite hochzuladen macht ihn deshalb nicht für das Plugin sichtbar. Sichere den lokalen Vault und lass ihn über das Plugin in Obsidian hochladen. Den Unterschied zum Sync-Ordner der Desktop-App erklärt unser [Google-Drive-Leitfaden](/de/blog/obsidian-google-drive-sync/).
 
-In diesem Zusammenhang kann Remotely Save genau das richtige Werkzeug sein.
+### Fehler mit OneDrive-Konten oder leeren Dateien
 
-## Wann Remotely Save nicht die beste Wahl sein muss
+Die kostenlose Anbindung ist für **persönliches OneDrive mit App Folder** dokumentiert. Ein Geschäfts- oder Schulkonto lässt sich damit nicht gleichsetzen. Der vollständige Zugriff auf persönliches OneDrive ist eine separate PRO-Funktion.
 
-Remotely Save ist möglicherweise nicht die beste Wahl, wenn Ihr eigentliches Ziel einfach lautet: Obsidian privat synchronisieren, mit möglichst wenig Konfiguration.
+Die [OneDrive-Dokumentation](https://github.com/remotely-save/remotely-save/blob/master/docs/remote_services/onedrive/README.md) weist außerdem darauf hin, dass die API keine leeren Dateien hochladen lässt. Scheitert der Sync an einer leeren Markdown-Notiz, prüfe die Einstellung für leere Dateien oder trage den vorgesehenen Inhalt ein und versuche es erneut.
 
-Ein anderer Ansatz kann besser sein, wenn:
+## Zugangsdaten, Konflikte und Backups
 
-- Sie kein Speicher-Backend wählen oder konfigurieren möchten
-- Sie keine Zugriffsschlüssel, WebDAV-URLs, Buckets oder anbieterspezifischen Einstellungen verwalten möchten
-- Sie einen Synchronisierungsdienst wollen, der eigens um das Verhalten von Obsidian-Vaults herum entworfen ist
-- Sie gehostete Synchronisierung wollen, ohne für den offiziellen Obsidian-Sync-Tarif zu bezahlen
-- Sie eine einfachere Geschichte für Wiederherstellung und Einrichtung auf mehreren Geräten wollen
+Die Datei `data.json` von Remotely Save kann sensible Einstellungen enthalten. Sie gehört nicht in ein öffentliches Git-Repository, einen Support-Screenshot oder den Anhang eines Fehlerberichts. Entferne auch aus Fehlermeldungen Tokens, Zugangsdaten und private Notizinhalte, bevor du sie teilst.
 
-Hier zählt die Unterscheidung:
+Die kostenlose Version bietet eine grundlegende Konfliktbehandlung; die erweiterte intelligente Konfliktbehandlung gehört zu PRO. Prüfe trotzdem beide Fassungen, wenn dieselbe Notiz auf zwei Geräten bearbeitet wurde. Sichere sie vor dem Zusammenführen und kontrolliere das Ergebnis auf dem anderen Gerät, bevor du weiterschreibst.
 
-Remotely Save ist ein flexibles Synchronisierungs-Plugin für Menschen, die eigenen Speicher mitbringen wollen.
+Bewahre Backups außerhalb des Sync-Ziels auf. Auch Löschungen und unerwünschte Änderungen können übertragen werden. Was sich wiederherstellen lässt, hängt von den tatsächlich vorhandenen Sicherungen und Versionsständen ab.
 
-Das ist etwas anderes, als einen sofort nutzbaren Obsidian-Synchronisierungsdienst zu wollen.
+## Wann passt eine andere Lösung besser?
 
-## Eine einfachere Alternative: Synch
+Remotely Save passt gut, wenn du einen bestimmten Speicheranbieter nutzen und dessen Einstellungen selbst verwalten möchtest. Funktioniert dein Test auf beiden Geräten, gibt es keinen Grund, allein wegen einer anderen verfügbaren Lösung umzuziehen.
 
-Wenn Remotely Save attraktiv klingt, weil Sie private Obsidian-Synchronisierung wollen, aber weniger attraktiv, weil Sie kein eigenes Backend konfigurieren möchten, lohnt sich ein Blick auf [Synch](https://synch.run/).
+Möchtest du dich weniger um die Speicheranbindung kümmern, kannst du einen gehosteten Dienst wählen:
 
-Synch ist ein Open-Source-Dienst mit Ende-zu-Ende-Verschlüsselung, der für Obsidian-Nutzer gebaut ist. Statt Sie einen Speicheranbieter mitbringen und in ein Plugin verdrahten zu lassen, stellt Synch die gehostete Synchronisierungsschicht bereit und konzentriert sich direkt auf den Workflow des Obsidian-Vaults.
+| Lösung | Passend, wenn du … | Was zu berücksichtigen ist |
+| --- | --- | --- |
+| Remotely Save | Dropbox, WebDAV, S3 oder einen anderen Speicher selbst wählen möchtest | Einrichtung, Zugangsdaten, Ausschlüsse und Wiederherstellung |
+| Obsidian Sync | den offiziellen integrierten Dienst bevorzugst | Kostenpflichtiges Abo und Auswahl der zu synchronisierenden Inhalte |
+| Synch | einen gehosteten Open-Source-Dienst mit Ende-zu-Ende-Verschlüsselung suchst | Passender Tarif für Vault-Größe und Anhänge |
 
-Damit wird der Kompromiss klarer:
+[Synch](/de/) stellt den Sync-Dienst bereit, sodass du kein zusätzliches Speicherkonto verbinden musst. Direkten Geräteabgleich, Self-Hosting und Git behandelt unser [Vergleich der Obsidian-Sync-Alternativen](/de/blog/obsidian-sync-alternatives/).
 
-| Wählen Sie Remotely Save, wenn ... | Wählen Sie Synch, wenn ... |
-| --- | --- |
-| Sie eigenen Speicher mitbringen möchten | Sie gehostete Obsidian-Synchronisierung möchten |
-| Sie Anbieter konfigurieren können | Sie weniger Einrichtung möchten |
-| Sie bereits S3, WebDAV, Dropbox oder ein anderes Backend nutzen | Sie einen Dienst möchten, der um das Vault herum entworfen ist |
-| Sie maximale Flexibilität beim Backend möchten | Sie einen einfacheren verschlüsselten Synchronisierungsweg möchten |
-
-Remotely Save bleibt eine starke Option für Nutzer, die die Speicherschicht selbst kontrollieren wollen. Synch fühlt sich natürlicher an, wenn Sie eigentlich private Obsidian-Synchronisierung wollen, ohne aus der Speicherauswahl ein Projekt zu machen.
-
-![Ein verschlüsseltes Obsidian-Vault, das über einen gehosteten Dienst mit mehreren Geräten synchronisiert](./hosted-encrypted-sync.webp)
-
-## Praktische Sicherheitscheckliste
-
-Unabhängig von der gewählten Synchronisierungsmethode sollten Sie vor dem Verbinden eines wichtigen Vaults ein paar Regeln befolgen:
-
-- Legen Sie vor der ersten Synchronisierung eine vollständige Sicherung an.
-- Testen Sie zuerst mit einem kleinen Vault.
-- Betreiben Sie nicht zwei Synchronisierungswerkzeuge auf demselben aktiven Vault.
-- Bestätigen Sie Verschlüsselung und Entschlüsselung auf einem zweiten Gerät, bevor Sie der Einrichtung vertrauen.
-- Halten Sie Zugangsdaten und Plugin-Einstellungen aus Git heraus.
-- Beobachten Sie, was mit `.obsidian`-Einstellungen passiert, bevor Sie sie breit synchronisieren.
-- Behalten Sie auch dann eine unabhängige Sicherung, wenn die Synchronisierung zu funktionieren scheint.
-
-Der letzte Punkt ist nicht optional. Synchronisierungswerkzeuge sind dafür gebaut, dass sich Geräte einig werden. Wenn eine falsche Löschung oder eine leere Datei zum vereinbarten Stand wird, brauchen Sie ein Backup außerhalb der Synchronisierungsschleife.
-
-## Fazit
-
-Remotely Save gehört zu den nützlichsten Obsidian-Synchronisierungs-Plugins, weil es Ihnen Wahlfreiheit gibt. Sie können Ihr Vault mit Speicher verbinden, den Sie bereits nutzen, Verschlüsselung konfigurieren, Desktop und Mobilgerät synchronisieren und vermeiden, an einen einzigen offiziellen Dienst gebunden zu sein.
-
-Aber diese Wahl bringt Verantwortung mit. Sie müssen ein Backend wählen, es korrekt konfigurieren, seine Grenzen verstehen und Ihren Wiederherstellungsweg testen.
-
-Wenn Sie diese Kontrolle wollen, verdient Remotely Save einen ernsthaften Blick.
-
-Wenn Sie vor allem private, gehostete, Ende-zu-Ende-verschlüsselte Obsidian-Synchronisierung mit weniger beweglichen Teilen wollen, kann Synch die einfachere Option sein.
+Bildquelle: [Dropbox-Anleitung von Remotely Save, Schritte 10, 12 und 13](https://github.com/remotely-save/remotely-save/blob/master/docs/dropbox_review_material/README.md#steps).
