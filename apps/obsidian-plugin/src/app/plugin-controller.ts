@@ -39,6 +39,9 @@ import type { SynchSettingsController } from "../ui/settings/controller";
 import { SynchSettingsStore } from "../settings/store";
 import { SynchRemoteVaultController } from "../ui/remote-vault/remote-vault-controller";
 import { SynchVersionHistoryController } from "../ui/version-history/version-history-controller";
+import { SynchConflictController } from "../ui/conflicts/conflict-controller";
+import type { ConflictAction } from "../ui/conflicts/conflict-files";
+import type { ConflictPreview } from "../ui/conflicts/conflict-preview";
 import type { SynchUiEvent } from "../ui/ui-events";
 import type { VersionHistoryViewState } from "../ui/version-history/version-history-view";
 import type {
@@ -50,6 +53,7 @@ import type {
   SynchEntryVersionCursor,
   SynchBlockedSyncFile,
   SynchCommunityPluginUpdateStatus,
+  SynchConflictFile,
   SynchServerCompatibilityStatus,
   SynchStorageDisplayState,
   SynchStorageStatus,
@@ -254,6 +258,7 @@ export class SynchPluginController implements SynchSettingsController {
     hasConnectedRemoteVault: () => this.hasConnectedRemoteVault(),
     refreshUi: () => this.refreshUi(),
   });
+  private readonly conflictController = new SynchConflictController({ plugin: this.plugin });
   private readonly remoteVaultController = new SynchRemoteVaultController({
     plugin: this.plugin,
     remoteVaultManager: this.remoteVaultManager,
@@ -752,6 +757,35 @@ export class SynchPluginController implements SynchSettingsController {
 
   async ensureVersionHistoryPane(): Promise<void> {
     await this.versionHistoryController.ensurePane();
+  }
+
+  async openConflictPane(): Promise<void> {
+    await this.conflictController.openPane();
+  }
+
+  refreshConflictViews(paths?: readonly string[]): void {
+    this.conflictController.refreshViews(paths);
+  }
+
+  // `SynchConflictView` talks to the plugin through this surface; the conflict
+  // controller already implements it, so these stay thin delegations.
+
+  async listConflicts(): Promise<SynchConflictFile[]> {
+    return await this.conflictController.listConflicts();
+  }
+
+  async previewConflict(
+    copyPath: string,
+  ): Promise<ConflictPreview> {
+    return await this.conflictController.previewConflict(copyPath);
+  }
+
+  async resolveConflict(copyPath: string, action: ConflictAction, preview: ConflictPreview): Promise<void> {
+    await this.conflictController.resolveConflict(copyPath, action, preview);
+  }
+
+  hideConflict(copyPath: string): void {
+    this.conflictController.hideConflict(copyPath);
   }
 
   async listActiveFileVersions(
