@@ -32,6 +32,31 @@ Existing credentials without an API URL retain the previous resolution behavior;
 the URL is saved after their session is successfully verified. Logout clears
 both the token and its URL.
 
+A local scan must complete before `synch sync` starts uploading changes.
+Permission and I/O errors, including errors reading Obsidian configuration
+directories, abort the scan and make the command exit with code 1. Files that
+could not be inspected are not treated as deleted. Restore filesystem access
+and retry; genuine local deletions continue to synchronize normally.
+
+## Filesystem links
+
+The selected vault directory is resolved to its canonical path. Symlinks below
+that root and their descendants are excluded from uploads, downloads, and
+deletions. Other files continue syncing. This includes dangling links and links
+pointing elsewhere inside the vault, matching the scanner's existing policy.
+Configuration files use the same exclusions. Excluding a previously synced path
+does not delete the remote file.
+
+The client retains remote metadata for excluded paths without marking their
+contents as locally applied. After a link is removed or replaced by an ordinary
+directory, the next sync checks a fresh server snapshot and resumes syncing that
+path, including after a CLI restart. Direct filesystem operations still reject
+symlinks as a final safety check if the filesystem changes during a sync.
+
+These checks prevent sync from following existing links. They are not a sandbox
+against a local process concurrently replacing directories during filesystem
+operations; descriptor-relative OS APIs would be needed for that guarantee.
+
 ## State layout
 
 - `<vault>/.synch/sync.sqlite` — local sync store (`node:sqlite`), never synced.

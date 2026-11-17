@@ -1,7 +1,7 @@
 {
   "name": "@synch/obsidian-plugin",
   "private": true,
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "End-to-end encrypted sync for Obsidian vaults.",
   "main": "main.js",
   "scripts": {
@@ -15,7 +15,8 @@
     "sync:metadata": "node scripts/sync-release-metadata.mjs",
     "release:prepare": "pnpm run sync:metadata && pnpm run build",
     "test": "vitest --config vitest.config.mts",
-    "typecheck": "tsgo --noEmit --skipLibCheck"
+    "typecheck": "tsgo --noEmit --skipLibCheck && pnpm run typecheck:tests",
+    "typecheck:tests": "tsgo --noEmit -p tsconfig.test.json"
   },
   "devDependencies": {
     "@codemirror/state": "6.5.0",

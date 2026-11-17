@@ -1,9 +1,13 @@
-import { type VaultConfigSyncRules, shouldSyncVaultConfigPath } from "@synch/sync-client/core";
+import fs from "node:fs/promises";
 
+import {
+  type VaultConfigSyncRules,
+  shouldSyncVaultConfigPath,
+} from "@synch/sync-client/core";
 import type { SyncVaultConfigSource } from "@synch/sync-client/engine";
 import type { SyncVaultFile } from "@synch/sync-client/vault";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { VaultPathResolver } from "./vault-path";
+import { isMissingPathError } from "./filesystem-errors";
 
 export interface NodeVaultConfigSourceDeps {
   vaultPath: string;
@@ -12,7 +16,11 @@ export interface NodeVaultConfigSourceDeps {
 }
 
 export class NodeVaultConfigSource implements SyncVaultConfigSource {
-  constructor(private readonly deps: NodeVaultConfigSourceDeps) {}
+  private readonly paths: VaultPathResolver;
+
+  constructor(private readonly deps: NodeVaultConfigSourceDeps) {
+    this.paths = new VaultPathResolver(deps.vaultPath);
+  }
 
   isSyncablePath(vaultRelativePath: string): boolean {
     return shouldSyncVaultConfigPath(
@@ -33,13 +41,17 @@ export class NodeVaultConfigSource implements SyncVaultConfigSource {
   }
 
   private async collectFiles(folder: string, files: SyncVaultFile[]): Promise<void> {
+    const absolute = await this.paths.resolveIfAllowed(folder);
+    if (absolute === null) return;
     let entries;
     try {
-      entries = await fs.readdir(this.absolutePath(folder), {
+      entries = await fs.readdir(absolute, {
         withFileTypes: true,
       });
-    } catch {
-      return;
+    } catch (error) {
+      // Missing config directories are normal; unreadable ones are not empty.
+      if (isMissingPathError(error)) return;
+      throw error;
     }
 
     for (const entry of entries) {
@@ -53,18 +65,18 @@ export class NodeVaultConfigSource implements SyncVaultConfigSource {
         continue;
       }
 
-      const stat = await fs.stat(this.absolutePath(relativePath));
+      const absoluteFile = await this.paths.resolveIfAllowed(relativePath);
+      if (absoluteFile === null) continue;
+      const stat = await fs.stat(absoluteFile);
       files.push({
         path: relativePath,
         mtime: Math.floor(stat.mtimeMs),
         size: stat.size,
-        readBytes: async () =>
-          new Uint8Array(await fs.readFile(this.absolutePath(relativePath))),
+        readBytes: async () => {
+          const absolute = await this.paths.resolve(relativePath);
+          return new Uint8Array(await fs.readFile(absolute));
+        },
       });
     }
-  }
-
-  private absolutePath(vaultRelativePath: string): string {
-    return path.join(this.deps.vaultPath, ...vaultRelativePath.split("/"));
   }
 }

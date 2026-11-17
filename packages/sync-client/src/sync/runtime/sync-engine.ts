@@ -44,15 +44,11 @@ import {
 } from "../remote/realtime-client";
 import type { WebSocketFactory } from "../remote/realtime-types";
 import type { SyncStore } from "../store/store";
-import {
-  getOrCreateStoredLocalVaultId,
-  readStoredSyncConnection,
-} from "../store/connection";
+import { getOrCreateStoredLocalVaultId } from "../store/connection";
 import type { UserVisibleSyncState } from "./user-visible-status";
 import type {
   SyncOperationProgress,
   UserVisibleSyncProgress,
-  VaultSyncProgress,
 } from "./user-visible-status";
 import type { SyncChangeSource } from "./change-source";
 import type { SyncVaultConfigSource } from "./vault-config-source";
@@ -66,13 +62,12 @@ import {
 } from "./version-history-service";
 import {
   listBlockedSyncFiles,
-  listFileSizeBlockedFiles,
   type SyncBlockedSyncFile,
 } from "../engine/file-size-blocked";
 import {
-  SyncActivityTracker,
+  SyncActivityReporter,
   type SyncActivityKind,
-} from "../engine/sync-activity-tracker";
+} from "./sync-activity-reporter";
 import { reapplyAllowedRemoteVaultConfig } from "../engine/vault-config-reapply";
 
 const HIDDEN_FOLDER_RECONCILE_INTERVAL_MS = 60_000;
@@ -119,7 +114,7 @@ export interface SyncEngineDeps {
   onPresenceCleared?: (presenceId: string) => void;
   onPresenceAvailabilityChanged?: (enabled: boolean) => void;
   onPresenceSessionReset?: () => void;
-  onFileSizeBlockedFilesChange?: () => void;
+  onBlockedSyncFilesChange?: () => void;
   onLocalChangeQueued?: () => void;
   onStorageQuotaExceeded?: () => void | Promise<void>;
   onRemoteVaultUnavailable?: (
@@ -132,8 +127,7 @@ export class SyncEngine {
   private syncStore: SyncStore | null = null;
   private localMutationQueue: Promise<void> = Promise.resolve();
   private localMutationWorkCount = 0;
-  private readonly activities = new SyncActivityTracker();
-  private readonly activityProgress = new Map<number, SyncOperationProgress>();
+  private readonly activityReporter: SyncActivityReporter;
   private hiddenFolderReconcileTimer: ReturnType<typeof setInterval> | null = null;
   private hiddenFolderReconcilePromise: Promise<void> | null = null;
   private readonly syncEventGate = new SyncEventGate();
@@ -153,11 +147,18 @@ export class SyncEngine {
   private disposed = false;
 
   constructor(private readonly deps: SyncEngineDeps) {
+    this.activityReporter = new SyncActivityReporter({
+      setProgress: (progress) => this.deps.setSyncProgress(progress),
+      getBaselineProgress: async () => this.syncStore
+        ? await this.syncStore.countSyncProgress()
+        : { completedEntries: 0, totalEntries: 0 },
+    });
     this.ownsContentRuntime = !deps.contentRuntime;
     this.contentRuntime = deps.contentRuntime ?? new SyncContentRuntime({ maxBytesInFlight: deps.maxBytesInFlight });
     this.vaultAdapter = deps.vaultAdapter;
     this.vaultConfigSource = deps.vaultConfigSource;
     this.syncEventRecorder = new SyncEventRecorder({
+      requireLocalStateForDelete: !!this.vaultAdapter.isExcludedPath,
       getSyncStore: () => this.syncStore,
       getRemoteVaultKey: () => this.deps.getRemoteVaultKey(),
       eventGate: this.syncEventGate,
@@ -180,8 +181,8 @@ export class SyncEngine {
       blobClient: this.syncBlobClient,
       contentRuntime: this.contentRuntime,
       onConflict: (event) => this.deps.notifySyncConflict(event),
-      onFileSizeBlockedFilesChange: () => {
-        this.deps.onFileSizeBlockedFilesChange?.();
+      onBlockedSyncFilesChange: () => {
+        this.deps.onBlockedSyncFilesChange?.();
       },
       onFileSyncStarted: (event) => {
         this.deps.diagnostics.record({
@@ -211,6 +212,7 @@ export class SyncEngine {
       shouldSyncPath: (path) =>
         this.decideVaultPathSync(path).kind === "sync",
       scanner: {
+        isExcludedPath: this.vaultAdapter.isExcludedPath?.bind(this.vaultAdapter),
         listFiles: async () => {
           const byPath = new Map<string, SyncVaultFile>();
           for (const file of await this.vaultAdapter.listFiles()) {
@@ -244,7 +246,7 @@ export class SyncEngine {
             session.maxFileSizeBytes,
           );
           if (unblocked > 0) {
-            this.deps.onFileSizeBlockedFilesChange?.();
+            this.deps.onBlockedSyncFilesChange?.();
           }
           return unblocked;
         }),
@@ -329,7 +331,7 @@ export class SyncEngine {
     });
     this.syncPullService = new SyncPullService({
       getConflictPolicy: this.deps.getConflictPolicy,
-      onRemoteStatesChange: () => this.deps.onFileSizeBlockedFilesChange?.(),
+      onRemoteStatesChange: () => this.deps.onBlockedSyncFilesChange?.(),
       getSyncToken: async () => await this.deps.getSyncToken(),
       getSyncStore: () => this.syncStore,
       getRemoteVaultKey: () => this.deps.getRemoteVaultKey(),
@@ -414,7 +416,7 @@ export class SyncEngine {
   }
 
   async readLocalVaultId(): Promise<string> {
-    return (await readStoredSyncConnection(this.requireStore()))?.localVaultId ?? "";
+    return (await this.requireStore().readSyncConnection())?.localVaultId ?? "";
   }
 
   async getEntryIdForPath(path: string): Promise<string | null> {
@@ -565,16 +567,7 @@ export class SyncEngine {
   }
 
   async refreshSyncProgress(): Promise<void> {
-    const store = this.syncStore;
-    if (!store) {
-      this.reportBaselineProgress({
-        completedEntries: 0,
-        totalEntries: 0,
-      });
-      return;
-    }
-
-    this.reportBaselineProgress(await store.countSyncProgress());
+    await this.activityReporter.refreshBaseline();
   }
 
   async hasPendingMutations(): Promise<boolean> {
@@ -666,16 +659,6 @@ export class SyncEngine {
     return await listBlockedSyncFiles(store, this.deps.getRemoteVaultKey());
   }
 
-  /** @deprecated Use `listBlockedSyncFiles`. */
-  async listFileSizeBlockedFiles(): Promise<SyncBlockedSyncFile[]> {
-    const store = this.syncStore;
-    if (!store) {
-      return [];
-    }
-
-    return await listFileSizeBlockedFiles(store, this.deps.getRemoteVaultKey());
-  }
-
   async listEntryVersionsForPath(
     path: string,
     before: EntryVersionPageCursor | null,
@@ -762,34 +745,7 @@ export class SyncEngine {
     kind: SyncActivityKind,
     work: (report: (progress: SyncOperationProgress) => Promise<void>) => Promise<T>,
   ): Promise<T> {
-    const activity = this.activities.begin(kind);
-    try {
-      return await work(async (progress) => {
-        if (!this.activities.contains(activity)) {
-          return;
-        }
-        this.activityProgress.set(activity.id, progress);
-        if (this.activities.visibleRemoteActivity()?.id === activity.id) {
-          this.deps.setSyncProgress(progress);
-        }
-      });
-    } finally {
-      const wasVisible = this.activities.visibleRemoteActivity()?.id === activity.id;
-      this.activities.end(activity);
-      this.activityProgress.delete(activity.id);
-      const visible = this.activities.visibleRemoteActivity();
-      const progress = visible && this.activityProgress.get(visible.id);
-      if (wasVisible && progress) {
-        this.deps.setSyncProgress(progress);
-      }
-      await this.refreshSyncProgress();
-    }
-  }
-
-  private reportBaselineProgress(progress: VaultSyncProgress): void {
-    if (!this.activities.hasActiveActivities()) {
-      this.deps.setSyncProgress(progress);
-    }
+    return await this.activityReporter.run(kind, work);
   }
 
   private requireStore(): SyncStore {
@@ -809,5 +765,5 @@ export class SyncEngine {
   }
 }
 
-export type { SyncBlockedSyncFile, SyncFileSizeBlockedFile } from "../engine/file-size-blocked";
+export type { SyncBlockedSyncFile } from "../engine/file-size-blocked";
 export type SyncEngineEntryVersionsPage = SyncEntryVersionsPage;
